@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QSizePolicy,
+    QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QSizePolicy, QLabel,
 )
 from qfluentwidgets import (
     SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
@@ -19,6 +19,7 @@ from qfluentwidgets import (
     RangeSettingCard, SwitchSettingCard, FluentIcon as FIF,
     InfoBar, InfoBarPosition, setTheme, Theme,
     CardWidget, SmoothScrollArea, IconWidget, setFont,
+    TransparentToolButton,
 )
 from qfluentwidgets import (
     ConfigItem, OptionsConfigItem, RangeConfigItem,
@@ -29,6 +30,7 @@ from loguru import logger
 
 from app.i18n import t, set_language
 from app.config import Config
+from app.core.game_icon import get_plugin_icon
 
 
 # -----------------------------------------------------------------------
@@ -98,6 +100,154 @@ class _AboutCard(CardWidget):
         root.addLayout(col, 1)
 
 
+class _EmulatorPathCard(CardWidget):
+    """Card for configuring install paths for a single emulator.
+
+    Shows the emulator icon + name, any configured paths as rows, and
+    an Add button.  Each path row has a remove button.
+    """
+
+    path_changed = Signal()  # emitted whenever a path is added/removed
+
+    def __init__(
+        self,
+        emulator_name: str,
+        display_name: str,
+        paths: list[str],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._emulator_name = emulator_name
+        self._paths: list[str] = list(paths)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 14, 20, 14)
+        root.setSpacing(10)
+
+        # Header row: icon + name + description + add button
+        header = QHBoxLayout()
+        header.setSpacing(12)
+
+        pm = get_plugin_icon(emulator_name, 28)
+        if pm and not pm.isNull():
+            icon_label = QLabel(self)
+            icon_label.setFixedSize(28, 28)
+            icon_label.setPixmap(pm)
+            header.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignVCenter)
+        else:
+            icon = IconWidget(FIF.GAME, self)
+            icon.setFixedSize(28, 28)
+            header.addWidget(icon, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(2)
+        title_col.setContentsMargins(0, 0, 0, 0)
+        title_label = StrongBodyLabel(
+            t("settings.emulator_install_path", name=display_name), self,
+        )
+        setFont(title_label, 13, QFont.Weight.DemiBold)
+        title_col.addWidget(title_label)
+        desc_label = CaptionLabel(
+            t("settings.emulator_install_path_desc"), self,
+        )
+        desc_label.setStyleSheet("color:#888;")
+        title_col.addWidget(desc_label)
+        header.addLayout(title_col, 1)
+
+        add_btn = TransparentToolButton(FIF.ADD, self)
+        add_btn.setFixedSize(32, 32)
+        add_btn.setToolTip(t("settings.add_path"))
+        add_btn.clicked.connect(self._on_add)
+        header.addWidget(add_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        root.addLayout(header)
+
+        # Container for path rows
+        self._rows_layout = QVBoxLayout()
+        self._rows_layout.setSpacing(4)
+        self._rows_layout.setContentsMargins(40, 0, 0, 0)  # indent
+        root.addLayout(self._rows_layout)
+
+        # Build existing path rows
+        for p in self._paths:
+            self._add_path_row(p)
+
+        self._update_height()
+
+    @property
+    def emulator_name(self) -> str:
+        return self._emulator_name
+
+    @property
+    def paths(self) -> list[str]:
+        return list(self._paths)
+
+    def _update_height(self) -> None:
+        """Recalculate card height to fit content."""
+        # header ~56px + 28px per path row + margins
+        header_h = 56
+        row_h = 28
+        margins = 28  # top + bottom padding
+        h = header_h + margins + row_h * len(self._paths)
+        self.setFixedHeight(max(72, h))
+        # Notify parent SettingCardGroup to re-layout
+        if self.parent() and hasattr(self.parent(), 'adjustSize'):
+            self.parent().adjustSize()
+
+    def _add_path_row(self, path: str) -> None:
+        """Add a visual row for one path."""
+        row = QHBoxLayout()
+        row.setSpacing(8)
+
+        icon = IconWidget(FIF.FOLDER, self)
+        icon.setFixedSize(16, 16)
+        row.addWidget(icon, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        label = CaptionLabel(path, self)
+        label.setStyleSheet("color:#555;")
+        row.addWidget(label, 1)
+
+        remove_btn = TransparentToolButton(FIF.CLOSE, self)
+        remove_btn.setFixedSize(24, 24)
+        remove_btn.setToolTip(t("settings.remove_path"))
+        remove_btn.clicked.connect(lambda checked, p=path: self._on_remove(p))
+        row.addWidget(remove_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        # Wrap in a widget so we can remove it later
+        wrapper = QWidget(self)
+        wrapper.setLayout(row)
+        wrapper.setProperty("path", path)
+        self._rows_layout.addWidget(wrapper)
+        self._update_height()
+
+    def _on_add(self) -> None:
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            t("settings.emulator_install_path", name=self._emulator_name),
+        )
+        if not folder:
+            return
+        if folder in self._paths:
+            return
+        self._paths.append(folder)
+        self._add_path_row(folder)
+        self.path_changed.emit()
+
+    def _on_remove(self, path: str) -> None:
+        if path in self._paths:
+            self._paths.remove(path)
+        # Remove the widget row
+        for i in range(self._rows_layout.count()):
+            item = self._rows_layout.itemAt(i)
+            if item and item.widget() and item.widget().property("path") == path:
+                w = item.widget()
+                self._rows_layout.removeWidget(w)
+                w.deleteLater()
+                break
+        self._update_height()
+        self.path_changed.emit()
+
+
 # -----------------------------------------------------------------------
 # Page
 # -----------------------------------------------------------------------
@@ -117,6 +267,27 @@ class SettingsPage(QWidget):
     def set_config(self, config: Config) -> None:
         self._config = config
         self._sync_from_config()
+
+    def set_plugin_manager(self, pm) -> None:
+        """Populate emulator path cards from registered plugins."""
+        from app.plugins.plugin_manager import PluginManager
+
+        self._pm: PluginManager = pm
+        for plugin in pm.get_all_plugins():
+            paths: list[str] = []
+            if self._config:
+                paths = self._config.get_emulator_install_paths(plugin.name)
+            card = _EmulatorPathCard(
+                emulator_name=plugin.name,
+                display_name=plugin.name.capitalize(),
+                paths=paths,
+                parent=self._emu_path_group,
+            )
+            card.path_changed.connect(
+                lambda c=card: self._on_emu_path_changed(c)
+            )
+            self._emu_path_group.addSettingCard(card)
+            self._emu_path_cards.append(card)
 
     # ------------------------------------------------------------------
     # UI
@@ -224,6 +395,14 @@ class SettingsPage(QWidget):
 
         layout.addWidget(sync_group)
 
+        # --- Emulator paths group ---
+        self._emu_path_group = SettingCardGroup(
+            t("settings.emulator_paths_group"), container,
+        )
+        self._emu_path_group.vBoxLayout.setSpacing(6)
+        layout.addWidget(self._emu_path_group)
+        self._emu_path_cards: list[_EmulatorPathCard] = []
+
         # --- About ---
         about_group = SettingCardGroup(t("settings.about"), container)
         self._about_card = _AboutCard(about_group)
@@ -319,3 +498,14 @@ class SettingsPage(QWidget):
     def _save(self, key: str, value: object) -> None:
         if self._config:
             self._config.set(key, value)
+
+    def _on_emu_path_changed(self, card: _EmulatorPathCard) -> None:
+        if self._config:
+            self._config.set_emulator_install_paths(card.emulator_name, card.paths)
+            InfoBar.success(
+                title=t("settings.save_success"),
+                content=t("settings.emulator_install_path", name=card.emulator_name),
+                parent=self,
+                position=InfoBarPosition.TOP,
+                duration=2000,
+            )

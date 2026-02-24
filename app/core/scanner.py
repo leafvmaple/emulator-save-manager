@@ -39,7 +39,12 @@ class Scanner:
         for plugin in self._pm.get_all_plugins():
             try:
                 logger.info("Detecting {}…", plugin.display_name)
-                installations = plugin.detect_installation()
+                extra = [
+                    Path(p)
+                    for p in self._cfg.get_emulator_install_paths(plugin.name)
+                    if p
+                ]
+                installations = plugin.detect_installation(extra or None)
                 self._detected_emulators.extend(installations)
             except Exception as e:
                 logger.error("Error detecting {}: {}", plugin.name, e)

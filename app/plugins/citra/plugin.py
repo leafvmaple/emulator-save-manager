@@ -81,13 +81,23 @@ class CitraPlugin(EmulatorPlugin):
     # Detection
     # ------------------------------------------------------------------
 
-    def detect_installation(self) -> list[EmulatorInfo]:
+    def detect_installation(
+        self,
+        extra_paths: list[Path] | None = None,
+    ) -> list[EmulatorInfo]:
         """Detect Citra / Lime3DS installations on this machine."""
         installations: list[EmulatorInfo] = []
         if platform.system() != "Windows":
             return installations
 
         candidates: list[Path] = []
+
+        # 0. User-configured paths
+        if extra_paths:
+            for p in extra_paths:
+                if p.exists() and p not in candidates:
+                    candidates.append(p)
+
         appdata = Path.home() / "AppData" / "Roaming"
 
         # 1. Official Citra

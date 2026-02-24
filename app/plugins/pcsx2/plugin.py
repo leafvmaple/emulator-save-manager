@@ -354,7 +354,10 @@ class PCSX2Plugin(EmulatorPlugin):
     def supported_platforms(self) -> list[str]:
         return ["PS2", "PS1"]
 
-    def detect_installation(self) -> list[EmulatorInfo]:
+    def detect_installation(
+        self,
+        extra_paths: list[Path] | None = None,
+    ) -> list[EmulatorInfo]:
         """Detect PCSX2 installations by checking common locations."""
         installations: list[EmulatorInfo] = []
         if platform.system() != "Windows":
@@ -362,6 +365,12 @@ class PCSX2Plugin(EmulatorPlugin):
             return installations
 
         candidates: list[Path] = []
+
+        # 0. User-configured paths
+        if extra_paths:
+            for p in extra_paths:
+                if p.exists() and p not in candidates:
+                    candidates.append(p)
 
         # 1. Documents/PCSX2 (default data dir)
         docs_path = Path.home() / "Documents" / "PCSX2"

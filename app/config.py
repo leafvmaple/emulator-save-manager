@@ -108,7 +108,7 @@ class Config:
         self._save()
 
     def get_emulator_paths(self, emulator_name: str) -> list[str]:
-        """Get user-configured custom paths for a specific emulator."""
+        """Get user-configured custom save scan paths for a specific emulator."""
         emu_cfg = self._data.get("emulators", {})
         return emu_cfg.get(emulator_name, {}).get("custom_paths", [])
 
@@ -118,6 +118,23 @@ class Config:
         if emulator_name not in self._data["emulators"]:
             self._data["emulators"][emulator_name] = {}
         self._data["emulators"][emulator_name]["custom_paths"] = paths
+        self._save()
+
+    def get_emulator_install_paths(self, emulator_name: str) -> list[str]:
+        """Get user-configured install / data paths for an emulator.
+
+        These are passed to ``detect_installation()`` so plugins can
+        locate emulators in non-standard directories.
+        """
+        emu_cfg = self._data.get("emulators", {})
+        return emu_cfg.get(emulator_name, {}).get("install_paths", [])
+
+    def set_emulator_install_paths(self, emulator_name: str, paths: list[str]) -> None:
+        if "emulators" not in self._data:
+            self._data["emulators"] = {}
+        if emulator_name not in self._data["emulators"]:
+            self._data["emulators"][emulator_name] = {}
+        self._data["emulators"][emulator_name]["install_paths"] = paths
         self._save()
 
     def to_dict(self) -> dict[str, Any]:

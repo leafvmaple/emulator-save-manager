@@ -120,8 +120,19 @@ class EmulatorPlugin(ABC):
         ...
 
     @abstractmethod
-    def detect_installation(self) -> list[EmulatorInfo]:
+    def detect_installation(
+        self,
+        extra_paths: list[Path] | None = None,
+    ) -> list[EmulatorInfo]:
         """Auto-detect emulator installations on this machine.
+
+        Parameters
+        ----------
+        extra_paths : list[Path], optional
+            User-configured paths to include as detection candidates.
+            Plugins whose data/install directories cannot be reliably
+            auto-detected (e.g. portable emulators in non-standard
+            locations) should merge these into their candidate list.
 
         Returns a list because the user might have multiple versions/installs.
         """

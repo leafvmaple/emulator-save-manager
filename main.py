@@ -62,6 +62,7 @@ def main() -> None:
     window.sync_page.set_sync_manager(sync_mgr)
     window.sync_page.set_config(config)
     window.settings_page.set_config(config)
+    window.settings_page.set_plugin_manager(pm)
 
     # Connect scan → backup page
     window.scan_page.saves_updated.connect(window.backup_page.update_saves)

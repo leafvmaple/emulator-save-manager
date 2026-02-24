@@ -119,13 +119,22 @@ class MesenPlugin(EmulatorPlugin):
     def supported_platforms(self) -> list[str]:
         return ["NES", "SNES", "Game Boy", "GBA", "PC Engine", "SMS", "WonderSwan"]
 
-    def detect_installation(self) -> list[EmulatorInfo]:
+    def detect_installation(
+        self,
+        extra_paths: list[Path] | None = None,
+    ) -> list[EmulatorInfo]:
         """Detect Mesen2 installations."""
         installations: list[EmulatorInfo] = []
         if platform.system() != "Windows":
             return installations
 
         candidates: list[Path] = []
+
+        # 0. User-configured paths
+        if extra_paths:
+            for p in extra_paths:
+                if p.exists() and p not in candidates:
+                    candidates.append(p)
 
         # 1. Default: Documents/Mesen2
         docs_path = Path.home() / "Documents" / "Mesen2"
