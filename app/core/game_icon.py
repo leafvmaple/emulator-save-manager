@@ -43,6 +43,9 @@ _PLUGINS_DIR = Path(__file__).parent.parent / "plugins"
 # In-memory cache for emulator plugin icon pixmaps
 _emu_icon_cache: dict[tuple[str, int], QPixmap | None] = {}
 
+# Type alias for per-emulator cover URL resolvers
+CoverResolver = type(lambda game_id: None)  # Callable[[str], str | None]
+
 
 def get_plugin_icon(plugin_name: str, size: int = 36) -> QPixmap | None:
     """Load the emulator icon from ``app/plugins/{name}/icon.png``.
@@ -87,6 +90,8 @@ class GameIconProvider:
         self._emulator_data_paths: dict[str, Path] = {}
         # In-memory pixmap cache: (emulator, game_id, size) → QPixmap
         self._pixmap_cache: dict[tuple[str, str, int], QPixmap] = {}
+        # Per-emulator cover URL resolvers: emulator_name → callable(game_id) → url
+        self._cover_resolvers: dict[str, object] = {}
 
     # ------------------------------------------------------------------
     # Configuration
@@ -95,6 +100,14 @@ class GameIconProvider:
     def register_emulator(self, name: str, data_path: Path) -> None:
         """Register an emulator's data directory for cover look-up."""
         self._emulator_data_paths[name] = data_path
+
+    def register_cover_resolver(self, emulator: str, resolver) -> None:
+        """Register a callable that maps *game_id* → cover URL for *emulator*.
+
+        The callable should accept a single ``game_id`` string and return
+        either an image URL (``str``) or ``None``.
+        """
+        self._cover_resolvers[emulator] = resolver
 
     # ------------------------------------------------------------------
     # Public API
@@ -149,13 +162,40 @@ class GameIconProvider:
         """Manually store a pixmap in the in-memory cache."""
         self._pixmap_cache[(emulator, game_id, width)] = pm
 
-    def download_cover(self, game_id: str) -> Path | None:
-        """Try to download a cover image and cache it.  Returns path or None."""
+    def download_cover(self, game_id: str, emulator: str | None = None) -> Path | None:
+        """Try to download a cover image and cache it.  Returns path or None.
+
+        If *emulator* is given and a cover resolver has been registered for
+        it, the resolver is tried first.  Otherwise falls back to the
+        built-in PS2-covers logic.
+        """
+        # --- Per-emulator resolver ---
+        if emulator and emulator in self._cover_resolvers:
+            result = self._cover_resolvers[emulator](game_id)
+            # Resolver may return a single URL (str) or a list of candidates
+            urls: list[str] = [result] if isinstance(result, str) else (result or [])
+            for url in urls:
+                if not url:
+                    continue
+                ext = ".png" if url.lower().endswith(".png") else ".jpg"
+                dest = self._cache_dir / f"{game_id}{ext}"
+                path = self._download_image(url, dest, game_id)
+                if path:
+                    return path
+            # All candidates failed — fall through to built-in logic
+            if urls:
+                return None
+
+        # --- Built-in PS2 covers fallback ---
         if not _SERIAL_RE.match(game_id):
             return None
 
         url = _COVER_URL.format(serial=game_id)
         dest = self._cache_dir / f"{game_id}.jpg"
+        return self._download_image(url, dest, game_id)
+
+    def _download_image(self, url: str, dest: Path, label: str = "") -> Path | None:
+        """Download an image from *url* to *dest*.  Returns *dest* or None."""
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "EmulatorSaveManager/0.1"})
             with urllib.request.urlopen(req, timeout=15) as resp:
@@ -164,10 +204,10 @@ class GameIconProvider:
                 # Probably an error page, not an image
                 return None
             dest.write_bytes(data)
-            logger.debug("Downloaded cover for {} ({} bytes)", game_id, len(data))
+            logger.debug("Downloaded cover for {} ({} bytes)", label or dest.stem, len(data))
             return dest
         except Exception:
-            logger.debug("Cover not available for {}", game_id)
+            logger.debug("Cover not available for {}", label or dest.stem)
             return None
 
     # ------------------------------------------------------------------
@@ -221,7 +261,7 @@ class IconDownloadWorker(QThread):
             # Skip if already cached
             if self._provider.get_icon_path(emulator, game_id):
                 continue
-            path = self._provider.download_cover(game_id)
+            path = self._provider.download_cover(game_id, emulator=emulator)
             if path:
                 self.icon_ready.emit(emulator, game_id, str(path))
         self.all_done.emit()

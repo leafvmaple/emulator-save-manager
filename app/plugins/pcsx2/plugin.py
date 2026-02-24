@@ -11,11 +11,9 @@ from typing import BinaryIO
 
 from loguru import logger
 
-from app.config import _default_data_dir
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
 from app.plugins.base import EmulatorPlugin
-from app.plugins.pcsx2.game_db import GameDB
 
 # PS2 memory card constants
 PS2_MEMCARD_MAGIC = b"Sony PS2 Memory Card Format"
@@ -344,15 +342,6 @@ def _scan_savestates(sstates_path: Path) -> list[GameSave]:
 class PCSX2Plugin(EmulatorPlugin):
     """Plugin for PCSX2 — PlayStation 2 emulator."""
 
-    _game_db: GameDB | None = None
-
-    @classmethod
-    def _get_game_db(cls) -> GameDB:
-        if cls._game_db is None:
-            cache_dir = _default_data_dir() / "cache"
-            cls._game_db = GameDB(cache_dir)
-        return cls._game_db
-
     @property
     def name(self) -> str:
         return "PCSX2"
@@ -478,37 +467,11 @@ class PCSX2Plugin(EmulatorPlugin):
             if not s.crc32 and s.game_id in crc_map:
                 s.crc32 = crc_map[s.game_id]
 
-        # --- Resolve display names from GameDB ---
-        self._resolve_display_names(
-            all_saves,
-            pcsx2_paths=[emulator_info.install_path, emulator_info.data_path],
-        )
+        # --- Resolve display names from local table ---
+        self.resolve_display_names(all_saves)
 
         logger.info("PCSX2: found {} game saves", len(all_saves))
         return all_saves
-
-    def _resolve_display_names(
-        self,
-        saves: list[GameSave],
-        pcsx2_paths: list[Path],
-    ) -> None:
-        """Set human-readable game names from the PCSX2 GameIndex DB."""
-        from app.i18n import get_current_language
-
-        db = self._get_game_db()
-        if not db.is_loaded:
-            db.load(pcsx2_paths)
-
-        if not db.is_loaded:
-            logger.warning("GameDB not available — using serial as display name")
-            return
-
-        lang = get_current_language()
-        for save in saves:
-            display = db.get_name(save.game_id, lang)
-            if display:
-                save.game_name = display
-            # else keep the existing name (serial or directory name)
 
     def get_save_directories(self, emulator_info: EmulatorInfo) -> dict[str, Path]:
         dp = emulator_info.data_path

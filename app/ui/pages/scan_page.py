@@ -465,6 +465,21 @@ class ScanPage(QWidget):
             for emu in emulators:
                 self._icon_provider.register_emulator(emu.name, emu.data_path)
 
+            # Register per-plugin cover URL resolvers
+            if self._scanner is not None:
+                pm = getattr(self._scanner, "_pm", None)
+                if pm is not None:
+                    seen_plugins: set[str] = set()
+                    for emu in emulators:
+                        if emu.name in seen_plugins:
+                            continue
+                        seen_plugins.add(emu.name)
+                        plugin = pm.get_plugin(emu.name)
+                        if plugin is not None and hasattr(plugin, "get_cover_urls"):
+                            self._icon_provider.register_cover_resolver(
+                                emu.name, plugin.get_cover_urls,
+                            )
+
         self._refresh_emulator_cards()
         self._refresh_game_cards()
         self._start_icon_download()
