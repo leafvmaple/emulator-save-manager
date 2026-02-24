@@ -1,22 +1,38 @@
-"""Backup page — create and manage versioned backups of game saves."""
+"""Backup page — card-based UI for backing up game saves.
+
+Each game is shown as a styled card with checkbox, game info, save-type
+badges, file details and action area.  Cards live inside a scrollable
+layout so the page handles many games gracefully.
+"""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal, QThread
+from collections import defaultdict
+
+from PySide6.QtCore import Qt, Signal, QThread, QSize
+from PySide6.QtGui import QFont, QColor
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QHeaderView, QTableWidgetItem,
-    QAbstractItemView,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
+    QGraphicsDropShadowEffect,
 )
 from qfluentwidgets import (
-    SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton,
-    TableWidget, FluentIcon as FIF, InfoBar, InfoBarPosition,
-    CheckBox, ProgressRing,
+    SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
+    PrimaryPushButton, PushButton, TransparentToolButton,
+    CardWidget, SmoothScrollArea, FluentIcon as FIF,
+    InfoBar, InfoBarPosition, InfoBadge,
+    CheckBox, ProgressRing, ToolTipFilter, ToolTipPosition,
+    setFont, FlowLayout, IconWidget,
 )
 from loguru import logger
 
 from app.i18n import t
-from app.models.game_save import GameSave
+from app.models.game_save import GameSave, SaveType
+from app.core.game_icon import GameIconProvider, get_plugin_icon
 
+
+# -----------------------------------------------------------------------
+# Worker
+# -----------------------------------------------------------------------
 
 class _BackupWorker(QThread):
     """Background thread for performing backups."""
@@ -36,16 +52,24 @@ class _BackupWorker(QThread):
     def run(self) -> None:
         success = 0
         errors: list[str] = []
-        total = len(self._saves)
-        for i, save in enumerate(self._saves, start=1):
+        groups: dict[str, list[GameSave]] = {}
+        for save in self._saves:
+            key = f"{save.emulator}:{save.game_id}"
+            groups.setdefault(key, []).append(save)
+        total = len(groups)
+        for i, (key, saves) in enumerate(groups.items(), start=1):
             try:
-                self._backup_manager.create_backup(save)
+                self._backup_manager.create_backup(saves)
                 success += 1
             except Exception as e:
-                errors.append(f"{save.game_name}: {e}")
+                errors.append(f"{saves[0].game_name}: {e}")
             self.progress.emit(i, total)
         self.finished.emit(success, errors)
 
+
+# -----------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------
 
 def _format_size(size_bytes: int) -> str:
     if size_bytes < 1024:
@@ -56,8 +80,174 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
 
 
+_SAVE_TYPE_COLORS: dict[SaveType, str] = {
+    SaveType.SAVESTATE: "#0078d4",
+    SaveType.MEMCARD: "#107c10",
+    SaveType.FOLDER: "#107c10",
+    SaveType.BATTERY: "#ff8c00",
+    SaveType.FILE: "#5c2d91",
+}
+
+
+def _game_group_key(save: GameSave) -> str:
+    return f"{save.emulator}:{save.game_id}"
+
+
+# -----------------------------------------------------------------------
+# Badge Widget
+# -----------------------------------------------------------------------
+
+class _TypeBadge(QLabel):
+    """A small coloured pill that indicates a save type."""
+
+    def __init__(self, text: str, color: str, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self.setFixedHeight(20)
+        setFont(self, 11)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pad = max(24, self.fontMetrics().horizontalAdvance(text) + 16)
+        self.setFixedWidth(pad)
+        self.setStyleSheet(
+            f"background:{color}; color:white; border-radius:10px; "
+            f"padding: 0 6px; font-weight:500;"
+        )
+
+
+# -----------------------------------------------------------------------
+# Game Card
+# -----------------------------------------------------------------------
+
+class _GameCard(CardWidget):
+    """Visual card representing one game and all its saves."""
+
+    checked_changed = Signal()
+    ICON_WIDTH = 42
+    ICON_MAX_HEIGHT = 58
+
+    def __init__(
+        self,
+        saves: list[GameSave],
+        icon_provider: GameIconProvider | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.saves = saves
+        self.setFixedHeight(110)
+
+        ref = saves[0]
+        display_name = ref.game_name
+        for s in saves:
+            if s.game_name != s.game_id:
+                display_name = s.game_name
+                break
+
+        root = QHBoxLayout(self)
+        root.setContentsMargins(16, 12, 16, 12)
+        root.setSpacing(16)
+
+        # --- Checkbox ---
+        self.cb = CheckBox(self)
+        self.cb.stateChanged.connect(lambda _: self.checked_changed.emit())
+        root.addWidget(self.cb, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        # --- Icon (cover art or fallback) ---
+        self._icon_label = QLabel(self)
+        self._icon_label.setFixedWidth(self.ICON_WIDTH)
+        self._icon_label.setMaximumHeight(self.ICON_MAX_HEIGHT)
+        self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pm = icon_provider.get_pixmap(ref.emulator, ref.game_id, self.ICON_WIDTH, self.ICON_MAX_HEIGHT) if icon_provider else None
+        if pm and not pm.isNull():
+            self._icon_label.setPixmap(pm)
+        else:
+            emu_pm = get_plugin_icon(ref.emulator, self.ICON_WIDTH)
+            if emu_pm and not emu_pm.isNull():
+                self._icon_label.setPixmap(emu_pm)
+            else:
+                fallback = IconWidget(FIF.GAME, self)
+                fallback.setFixedSize(40, 40)
+                fl = QVBoxLayout(self._icon_label)
+                fl.setContentsMargins(0, 0, 0, 0)
+                fl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                fl.addWidget(fallback)
+        root.addWidget(self._icon_label, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        # --- Info column ---
+        info_col = QVBoxLayout()
+        info_col.setSpacing(4)
+        info_col.setContentsMargins(0, 0, 0, 0)
+
+        # Title row
+        title_row = QHBoxLayout()
+        title_row.setSpacing(8)
+        title_label = StrongBodyLabel(display_name, self)
+        setFont(title_label, 14, QFont.Weight.DemiBold)
+        title_row.addWidget(title_label)
+
+        emu_badge = CaptionLabel(ref.emulator, self)
+        emu_badge.setStyleSheet(
+            "background:#e0e0e0; color:#444; border-radius:3px; padding:1px 6px;"
+        )
+        title_row.addWidget(emu_badge)
+        title_row.addStretch()
+        info_col.addLayout(title_row)
+
+        # Badge row — one pill per save type
+        badge_row = QHBoxLayout()
+        badge_row.setSpacing(6)
+        all_types = sorted(
+            {sf.save_type for s in saves for sf in s.save_files},
+            key=lambda x: x.value,
+        )
+        for st in all_types:
+            color = _SAVE_TYPE_COLORS.get(st, "#888")
+            badge_row.addWidget(_TypeBadge(t(f"save_type.{st.value}"), color, self))
+        badge_row.addStretch()
+        info_col.addLayout(badge_row)
+
+        # Meta row
+        meta_row = QHBoxLayout()
+        meta_row.setSpacing(16)
+
+        total_size = sum(s.total_size for s in saves)
+        file_count = sum(len(s.save_files) for s in saves)
+        last_mod = max(
+            (s.last_modified for s in saves if s.last_modified),
+            default=None,
+        )
+
+        meta_row.addWidget(CaptionLabel(
+            f"ID: {ref.game_id}", self
+        ))
+        meta_row.addWidget(CaptionLabel(
+            f"{t('scan.size')}: {_format_size(total_size)}", self
+        ))
+        meta_row.addWidget(CaptionLabel(
+            f"{file_count} {t('backup.file_group', type='', count=str(file_count)).strip()}"
+            if file_count > 1 else f"1 file", self
+        ))
+        if last_mod:
+            meta_row.addWidget(CaptionLabel(
+                last_mod.strftime("%Y/%m/%d %H:%M"), self
+            ))
+        meta_row.addStretch()
+        info_col.addLayout(meta_row)
+
+        root.addLayout(info_col, 1)
+
+    @property
+    def is_checked(self) -> bool:
+        return self.cb.isChecked()
+
+    def set_checked(self, val: bool) -> None:
+        self.cb.setChecked(val)
+
+
+# -----------------------------------------------------------------------
+# Page
+# -----------------------------------------------------------------------
+
 class BackupPage(QWidget):
-    """Page for backing up scanned game saves."""
+    """Page for backing up scanned game saves with card-based UI."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -65,107 +255,134 @@ class BackupPage(QWidget):
         self._saves: list[GameSave] = []
         self._backup_manager = None
         self._worker: _BackupWorker | None = None
+        self._cards: list[_GameCard] = []
+        self._icon_provider: GameIconProvider | None = None
         self._init_ui()
 
     def set_backup_manager(self, bm) -> None:  # noqa: ANN001
         self._backup_manager = bm
 
+    def set_icon_provider(self, provider: GameIconProvider) -> None:
+        self._icon_provider = provider
+
     def update_saves(self, saves: list[GameSave]) -> None:
         self._saves = saves
-        self._refresh_table()
+        self._refresh_cards()
 
     # ------------------------------------------------------------------
     # UI Setup
     # ------------------------------------------------------------------
 
     def _init_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(36, 20, 36, 20)
-        layout.setSpacing(16)
+        page_layout = QVBoxLayout(self)
+        page_layout.setContentsMargins(36, 20, 36, 20)
+        page_layout.setSpacing(12)
 
         title = SubtitleLabel(t("backup.title"), self)
         desc = BodyLabel(t("backup.description"), self)
         desc.setWordWrap(True)
-        layout.addWidget(title)
-        layout.addWidget(desc)
+        page_layout.addWidget(title)
+        page_layout.addWidget(desc)
 
-        # Actions
+        # Action bar
         action_bar = QHBoxLayout()
+        action_bar.setSpacing(12)
+
         self._select_all_cb = CheckBox(t("common.select_all"), self)
         self._select_all_cb.stateChanged.connect(self._on_select_all)
         action_bar.addWidget(self._select_all_cb)
 
-        self._backup_btn = PrimaryPushButton(FIF.SAVE, t("backup.backup_selected"), self)
-        self._backup_btn.setFixedWidth(160)
-        self._backup_btn.clicked.connect(self._on_backup)
-        action_bar.addWidget(self._backup_btn)
+        self._count_badge = InfoBadge.attension("0", parent=self)
+        self._count_badge.setFixedHeight(20)
+        action_bar.addWidget(self._count_badge)
+
+        action_bar.addStretch()
 
         self._progress = ProgressRing(self)
         self._progress.setFixedSize(24, 24)
         self._progress.hide()
         action_bar.addWidget(self._progress)
 
-        self._status_label = BodyLabel("", self)
+        self._status_label = CaptionLabel("", self)
         action_bar.addWidget(self._status_label)
-        action_bar.addStretch()
-        layout.addLayout(action_bar)
 
-        # Table
-        self._table = TableWidget(self)
-        self._table.setColumnCount(6)
-        self._table.setHorizontalHeaderLabels([
-            "",  # checkbox column
-            t("scan.emulator"),
-            t("scan.game_name"),
-            t("scan.game_id"),
-            t("scan.size"),
-            t("scan.last_modified"),
-        ])
-        self._table.setColumnWidth(0, 40)
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self._table.verticalHeader().hide()
-        self._table.setBorderVisible(True)
-        self._table.setBorderRadius(8)
-        layout.addWidget(self._table, stretch=1)
+        self._backup_btn = PrimaryPushButton(FIF.SAVE, t("backup.backup_selected"), self)
+        self._backup_btn.setFixedWidth(160)
+        self._backup_btn.clicked.connect(self._on_backup)
+        action_bar.addWidget(self._backup_btn)
+
+        page_layout.addLayout(action_bar)
+
+        # Scrollable card area
+        self._scroll = SmoothScrollArea(self)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self._scroll_inner = QWidget()
+        self._card_layout = QVBoxLayout(self._scroll_inner)
+        self._card_layout.setContentsMargins(0, 0, 8, 0)
+        self._card_layout.setSpacing(8)
+        self._card_layout.addStretch()
+        self._scroll.setWidget(self._scroll_inner)
+        page_layout.addWidget(self._scroll, stretch=1)
+
+        # Empty state
+        self._empty_label = BodyLabel(t("common.no_data"), self)
+        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_label.setStyleSheet("color: #888;")
+        page_layout.addWidget(self._empty_label)
+        self._empty_label.hide()
 
     # ------------------------------------------------------------------
-    # Table
+    # Card population
     # ------------------------------------------------------------------
 
-    def _refresh_table(self) -> None:
-        self._table.setRowCount(0)
+    def _refresh_cards(self) -> None:
+        # Clear old cards
+        for card in self._cards:
+            self._card_layout.removeWidget(card)
+            card.deleteLater()
+        self._cards.clear()
+
+        # Group saves by game
+        groups: dict[str, list[GameSave]] = defaultdict(list)
         for save in self._saves:
-            row = self._table.rowCount()
-            self._table.insertRow(row)
+            groups[_game_group_key(save)].append(save)
 
-            cb = CheckBox(self)
-            self._table.setCellWidget(row, 0, cb)
-            self._table.setItem(row, 1, QTableWidgetItem(save.emulator))
-            self._table.setItem(row, 2, QTableWidgetItem(save.game_name))
-            self._table.setItem(row, 3, QTableWidgetItem(save.game_id))
-            self._table.setItem(row, 4, QTableWidgetItem(_format_size(save.total_size)))
-            lm = save.last_modified
-            self._table.setItem(row, 5, QTableWidgetItem(
-                lm.strftime("%Y/%m/%d %H:%M") if lm else "-"
-            ))
+        if not groups:
+            self._scroll.hide()
+            self._empty_label.show()
+            self._update_count()
+            return
+
+        self._empty_label.hide()
+        self._scroll.show()
+
+        for key in sorted(groups):
+            card = _GameCard(groups[key], self._icon_provider, self._scroll_inner)
+            card.checked_changed.connect(self._update_count)
+            self._card_layout.insertWidget(self._card_layout.count() - 1, card)
+            self._cards.append(card)
+
+        self._update_count()
+
+    def _update_count(self) -> None:
+        n = sum(1 for c in self._cards if c.is_checked)
+        self._count_badge.setText(str(n))
+
+    # ------------------------------------------------------------------
+    # Selection helpers
+    # ------------------------------------------------------------------
 
     def _on_select_all(self, state: int) -> None:
         checked = state == Qt.CheckState.Checked.value
-        for row in range(self._table.rowCount()):
-            cb = self._table.cellWidget(row, 0)
-            if isinstance(cb, CheckBox):
-                cb.setChecked(checked)
+        for card in self._cards:
+            card.set_checked(checked)
 
     def _get_selected_saves(self) -> list[GameSave]:
         selected: list[GameSave] = []
-        for row in range(self._table.rowCount()):
-            cb = self._table.cellWidget(row, 0)
-            if isinstance(cb, CheckBox) and cb.isChecked():
-                if row < len(self._saves):
-                    selected.append(self._saves[row])
+        for card in self._cards:
+            if card.is_checked:
+                selected.extend(card.saves)
         return selected
 
     # ------------------------------------------------------------------
@@ -177,9 +394,7 @@ class BackupPage(QWidget):
             InfoBar.warning(
                 title=t("common.warning"),
                 content="Backup manager not initialized",
-                parent=self,
-                position=InfoBarPosition.TOP,
-                duration=3000,
+                parent=self, position=InfoBarPosition.TOP, duration=3000,
             )
             return
 
@@ -187,10 +402,8 @@ class BackupPage(QWidget):
         if not selected:
             InfoBar.warning(
                 title=t("common.warning"),
-                content=t("backup.backup_selected"),
-                parent=self,
-                position=InfoBarPosition.TOP,
-                duration=3000,
+                content=t("backup.no_selection"),
+                parent=self, position=InfoBarPosition.TOP, duration=3000,
             )
             return
 
@@ -216,16 +429,13 @@ class BackupPage(QWidget):
         if errors:
             InfoBar.warning(
                 title=t("backup.backup_complete"),
-                content=t("backup.backup_success", count=str(success)) + f"\n{len(errors)} errors",
-                parent=self,
-                position=InfoBarPosition.TOP,
-                duration=5000,
+                content=t("backup.backup_success", count=str(success))
+                + f"\n{len(errors)} errors",
+                parent=self, position=InfoBarPosition.TOP, duration=5000,
             )
         else:
             InfoBar.success(
                 title=t("backup.backup_complete"),
                 content=t("backup.backup_success", count=str(success)),
-                parent=self,
-                position=InfoBarPosition.TOP,
-                duration=3000,
+                parent=self, position=InfoBarPosition.TOP, duration=3000,
             )

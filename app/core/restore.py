@@ -1,9 +1,9 @@
-"""Restore engine — copies backup files back to their original emulator locations."""
+"""Restore engine — extracts ZIP backup archives back to original emulator locations."""
 
 from __future__ import annotations
 
 import json
-import shutil
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -17,8 +17,8 @@ from app.models.backup_record import BackupRecord
 class FileChange:
     """Describes a single file that will be overwritten during restore."""
 
-    source: Path
-    """File in the backup."""
+    source: str
+    """Path inside the ZIP archive."""
 
     destination: Path
     """Original location where the file will be written."""
@@ -37,7 +37,7 @@ class FileChange:
 
 
 class RestoreManager:
-    """Handles restoring game saves from backup records."""
+    """Handles restoring game saves from ZIP backup records."""
 
     def preview_restore(self, record: BackupRecord) -> list[FileChange]:
         """Preview what files will be changed by restoring a backup.
@@ -46,49 +46,37 @@ class RestoreManager:
         writing anything.
         """
         changes: list[FileChange] = []
-        info_path = record.backup_path / "backup_info.json"
-        if not info_path.exists():
-            logger.warning("backup_info.json not found: {}", record.backup_path)
+        zip_path = record.backup_path
+        meta_path = zip_path.with_suffix(".json")
+        if not zip_path.exists() or not meta_path.exists():
+            logger.warning("Backup files not found: {}", zip_path)
             return changes
 
-        with open(info_path, "r", encoding="utf-8") as f:
+        with open(meta_path, "r", encoding="utf-8") as f:
             info = json.load(f)
 
-        for bp in info.get("backup_paths", []):
-            folder_name = bp["folder_name"]
-            source_dir = record.backup_path / folder_name
-            dest_path = Path(bp["source"])
-            backup_type = bp.get("type", "file")
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            names_set = {zi.filename for zi in zf.infolist()}
+            for bp in info.get("backup_paths", []):
+                source_path = Path(bp["source"])
+                is_dir = bp.get("is_dir", False)
+                zip_prefix = bp.get("zip_path", "")
 
-            if backup_type in ("folder", "memcard_folder"):
-                # Directory restore
-                if source_dir.exists():
-                    for src_file in source_dir.rglob("*"):
-                        if not src_file.is_file():
-                            continue
-                        rel = src_file.relative_to(source_dir)
-                        dst_file = dest_path / rel
-                        changes.append(self._make_change(src_file, dst_file))
-            else:
-                # Single file restore
-                filename = bp.get("filename", "")
-                if filename:
-                    src_file = source_dir / filename
-                    dst_file = dest_path
-                    if src_file.exists():
-                        changes.append(self._make_change(src_file, dst_file))
+                if is_dir:
+                    for entry in zf.infolist():
+                        if entry.filename.startswith(zip_prefix) and not entry.is_dir():
+                            rel = entry.filename[len(zip_prefix):]
+                            dst_file = source_path / rel
+                            changes.append(self._make_change(entry, dst_file))
                 else:
-                    # Legacy or directory-as-file
-                    if source_dir.exists():
-                        for src_file in source_dir.rglob("*"):
-                            if not src_file.is_file():
-                                continue
-                            changes.append(self._make_change(src_file, dest_path))
+                    if zip_prefix in names_set:
+                        entry = zf.getinfo(zip_prefix)
+                        changes.append(self._make_change(entry, source_path))
 
         return changes
 
     def restore_backup(self, record: BackupRecord, force: bool = False) -> list[str]:
-        """Restore files from a backup to their original locations.
+        """Restore files from a ZIP backup to their original locations.
 
         Parameters
         ----------
@@ -103,48 +91,47 @@ class RestoreManager:
             List of error messages (empty on full success).
         """
         errors: list[str] = []
-        info_path = record.backup_path / "backup_info.json"
-        if not info_path.exists():
-            errors.append(f"backup_info.json not found: {record.backup_path}")
+        zip_path = record.backup_path
+        meta_path = zip_path.with_suffix(".json")
+
+        if not zip_path.exists():
+            errors.append(f"Backup zip not found: {zip_path}")
+            return errors
+        if not meta_path.exists():
+            errors.append(f"Backup metadata not found: {meta_path}")
             return errors
 
-        with open(info_path, "r", encoding="utf-8") as f:
+        with open(meta_path, "r", encoding="utf-8") as f:
             info = json.load(f)
 
-        for bp in info.get("backup_paths", []):
-            folder_name = bp["folder_name"]
-            source_dir = record.backup_path / folder_name
-            dest_path = Path(bp["source"])
-            backup_type = bp.get("type", "file")
-            filename = bp.get("filename", "")
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            for bp in info.get("backup_paths", []):
+                source_path = Path(bp["source"])
+                is_dir = bp.get("is_dir", False)
+                zip_prefix = bp.get("zip_path", "")
 
-            try:
-                if backup_type in ("folder", "memcard_folder"):
-                    if not source_dir.exists():
-                        errors.append(f"Source not found: {source_dir}")
-                        continue
-                    dest_path.mkdir(parents=True, exist_ok=True)
-                    shutil.copytree(source_dir, dest_path, dirs_exist_ok=True)
-                    logger.info("Restored folder {} → {}", source_dir, dest_path)
-                else:
-                    if filename:
-                        src_file = source_dir / filename
+                try:
+                    if is_dir:
+                        # Restore folder: extract all files under zip_prefix
+                        source_path.mkdir(parents=True, exist_ok=True)
+                        for entry in zf.infolist():
+                            if entry.filename.startswith(zip_prefix) and not entry.is_dir():
+                                rel = entry.filename[len(zip_prefix):]
+                                dst_file = source_path / rel
+                                dst_file.parent.mkdir(parents=True, exist_ok=True)
+                                with zf.open(entry) as src, open(dst_file, "wb") as dst:
+                                    dst.write(src.read())
+                        logger.info("Restored folder → {}", source_path)
                     else:
-                        # pick the first file in the directory
-                        files = list(source_dir.iterdir()) if source_dir.exists() else []
-                        src_file = files[0] if files else None
-
-                    if src_file is None or not src_file.exists():
-                        errors.append(f"Source file not found: {source_dir}/{filename}")
-                        continue
-
-                    dest_path.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(src_file, dest_path)
-                    logger.info("Restored file {} → {}", src_file, dest_path)
-            except Exception as e:
-                msg = f"Error restoring {folder_name}: {e}"
-                logger.error(msg)
-                errors.append(msg)
+                        # Restore single file
+                        source_path.parent.mkdir(parents=True, exist_ok=True)
+                        with zf.open(zip_prefix) as src, open(source_path, "wb") as dst:
+                            dst.write(src.read())
+                        logger.info("Restored file → {}", source_path)
+                except Exception as e:
+                    msg = f"Error restoring {zip_prefix}: {e}"
+                    logger.error(msg)
+                    errors.append(msg)
 
         return errors
 
@@ -153,8 +140,8 @@ class RestoreManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _make_change(src: Path, dst: Path) -> FileChange:
-        src_mtime = datetime.fromtimestamp(src.stat().st_mtime) if src.exists() else None
+    def _make_change(entry: zipfile.ZipInfo, dst: Path) -> FileChange:
+        src_mtime = datetime(*entry.date_time) if entry.date_time else None
         if dst.exists():
             dst_mtime = datetime.fromtimestamp(dst.stat().st_mtime)
             is_newer = dst_mtime > src_mtime if src_mtime else False
@@ -162,7 +149,7 @@ class RestoreManager:
             dst_mtime = None
             is_newer = False
         return FileChange(
-            source=src,
+            source=entry.filename,
             destination=dst,
             dest_exists=dst.exists(),
             dest_modified=dst_mtime,

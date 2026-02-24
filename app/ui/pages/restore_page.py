@@ -1,21 +1,33 @@
-"""Restore page — restore game saves from versioned backups."""
+"""Restore page — card-based UI for browsing and restoring backups.
+
+Each game is shown as a card; expanding it reveals individual backup
+versions as sub-cards with timestamp, version number, pin/label info,
+and a one-click restore button.
+"""
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QHeaderView, QTableWidgetItem,
-    QAbstractItemView, QTreeWidgetItem,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
 )
 from qfluentwidgets import (
-    SubtitleLabel, BodyLabel, PrimaryPushButton, PushButton,
-    TableWidget, TreeWidget, FluentIcon as FIF, InfoBar, InfoBarPosition,
-    MessageBox, ProgressRing,
+    SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
+    PrimaryPushButton, PushButton, TransparentToolButton,
+    CardWidget, SimpleCardWidget, SmoothScrollArea,
+    FluentIcon as FIF, InfoBar, InfoBarPosition, InfoBadge,
+    MessageBox, ProgressRing, IconWidget,
+    setFont,
 )
 from loguru import logger
 
 from app.i18n import t
 from app.models.backup_record import BackupRecord
+from app.core.game_icon import GameIconProvider, get_plugin_icon
 
 
 def _format_size(size_bytes: int) -> str:
@@ -27,8 +39,238 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
 
 
+def _zip_size(record: BackupRecord) -> int:
+    """Return the size of the backup zip file, or 0."""
+    try:
+        return record.backup_path.stat().st_size if record.backup_path.exists() else 0
+    except Exception:
+        return 0
+
+
+def _backup_types(record: BackupRecord) -> list[str]:
+    """Read save types from the sidecar json metadata."""
+    meta = record.backup_path.with_suffix(".json")
+    if not meta.exists():
+        return []
+    try:
+        with open(meta, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        types = sorted({bp.get("type", "") for bp in data.get("backup_paths", [])})
+        return [t(f"save_type.{tp}") for tp in types if tp]
+    except Exception:
+        return []
+
+
+# -----------------------------------------------------------------------
+# Version sub-card
+# -----------------------------------------------------------------------
+
+class _VersionCard(SimpleCardWidget):
+    """A compact card representing a single backup version."""
+
+    restore_clicked = Signal(object)  # emits BackupRecord
+
+    def __init__(self, record: BackupRecord, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.record = record
+        self.setFixedHeight(56)
+
+        root = QHBoxLayout(self)
+        root.setContentsMargins(16, 8, 12, 8)
+        root.setSpacing(12)
+
+        # Version badge
+        ver_label = QLabel(f"v{record.version}", self)
+        ver_label.setFixedSize(36, 24)
+        ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ver_label.setStyleSheet(
+            "background:#0078d4; color:white; border-radius:4px; font-weight:600; font-size:12px;"
+        )
+        root.addWidget(ver_label)
+
+        # Info
+        info = QVBoxLayout()
+        info.setSpacing(0)
+        info.setContentsMargins(0, 0, 0, 0)
+
+        top_row = QHBoxLayout()
+        top_row.setSpacing(8)
+        time_label = BodyLabel(record.display_time, self)
+        setFont(time_label, 13)
+        top_row.addWidget(time_label)
+
+        if record.is_pinned:
+            pin = CaptionLabel(f"[{t('backup.pin')}]", self)
+            pin.setStyleSheet("color:#d83b01; font-weight:600;")
+            top_row.addWidget(pin)
+
+        if record.label:
+            lbl = CaptionLabel(record.label, self)
+            lbl.setStyleSheet("color:#666; font-style:italic;")
+            top_row.addWidget(lbl)
+
+        top_row.addStretch()
+        info.addLayout(top_row)
+
+        # Size
+        size = _zip_size(record)
+        if size:
+            size_label = CaptionLabel(_format_size(size), self)
+            info.addWidget(size_label)
+
+        root.addLayout(info, 1)
+
+        # Restore button
+        restore_btn = PushButton(FIF.HISTORY, t("restore.restore_selected"), self)
+        restore_btn.setFixedWidth(100)
+        setFont(restore_btn, 12)
+        restore_btn.clicked.connect(lambda: self.restore_clicked.emit(self.record))
+        root.addWidget(restore_btn)
+
+
+# -----------------------------------------------------------------------
+# Game card
+# -----------------------------------------------------------------------
+
+class _GameBackupCard(CardWidget):
+    """Expandable card for a game showing its backup history."""
+
+    restore_requested = Signal(object)  # emits BackupRecord
+    ICON_WIDTH = 42
+    ICON_MAX_HEIGHT = 58
+
+    def __init__(
+        self,
+        game_name: str,
+        emulator: str,
+        game_id: str,
+        records: list[BackupRecord],
+        icon_provider: GameIconProvider | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._records = records
+        self._expanded = False
+        self._version_cards: list[_VersionCard] = []
+
+        main = QVBoxLayout(self)
+        main.setContentsMargins(0, 0, 0, 0)
+        main.setSpacing(0)
+
+        # --- Header ---
+        header = QWidget(self)
+        header.setCursor(Qt.CursorShape.PointingHandCursor)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(16, 12, 16, 12)
+        header_layout.setSpacing(12)
+
+        # Icon — cover art or fallback
+        self._icon_label = QLabel(header)
+        self._icon_label.setFixedWidth(self.ICON_WIDTH)
+        self._icon_label.setMaximumHeight(self.ICON_MAX_HEIGHT)
+        self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pm = icon_provider.get_pixmap(emulator, game_id, self.ICON_WIDTH, self.ICON_MAX_HEIGHT) if icon_provider else None
+        if pm and not pm.isNull():
+            self._icon_label.setPixmap(pm)
+        else:
+            emu_pm = get_plugin_icon(emulator, self.ICON_WIDTH)
+            if emu_pm and not emu_pm.isNull():
+                self._icon_label.setPixmap(emu_pm)
+            else:
+                fallback = IconWidget(FIF.GAME, header)
+                fallback.setFixedSize(36, 36)
+                fl = QVBoxLayout(self._icon_label)
+                fl.setContentsMargins(0, 0, 0, 0)
+                fl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                fl.addWidget(fallback)
+        header_layout.addWidget(self._icon_label)
+
+        # Title + meta
+        title_col = QVBoxLayout()
+        title_col.setSpacing(2)
+        title_col.setContentsMargins(0, 0, 0, 0)
+
+        title_row = QHBoxLayout()
+        title_row.setSpacing(8)
+        title_label = StrongBodyLabel(game_name, header)
+        setFont(title_label, 14, QFont.Weight.DemiBold)
+        title_row.addWidget(title_label)
+
+        emu_badge = CaptionLabel(emulator, header)
+        emu_badge.setStyleSheet(
+            "background:#e0e0e0; color:#444; border-radius:3px; padding:1px 6px;"
+        )
+        title_row.addWidget(emu_badge)
+        title_row.addStretch()
+        title_col.addLayout(title_row)
+
+        meta_row = QHBoxLayout()
+        meta_row.setSpacing(12)
+        meta_row.addWidget(CaptionLabel(f"ID: {game_id}", header))
+        meta_row.addWidget(CaptionLabel(
+            f"{len(records)} {t('backup.backup_count').lower()}", header
+        ))
+
+        # Type badges from latest backup
+        types = _backup_types(records[0]) if records else []
+        for tp_text in types:
+            badge = CaptionLabel(tp_text, header)
+            badge.setStyleSheet(
+                "background:#0078d4; color:white; border-radius:3px; "
+                "padding:1px 6px; font-size:11px;"
+            )
+            meta_row.addWidget(badge)
+
+        meta_row.addStretch()
+        meta_row.addWidget(CaptionLabel(
+            f"{t('backup.last_backup')}: {records[0].display_time}" if records else "", header
+        ))
+        title_col.addLayout(meta_row)
+
+        header_layout.addLayout(title_col, 1)
+
+        # Expand indicator
+        self._chevron = TransparentToolButton(FIF.CHEVRON_RIGHT, header)
+        self._chevron.setFixedSize(28, 28)
+        self._chevron.setEnabled(False)
+        header_layout.addWidget(self._chevron)
+
+        main.addWidget(header)
+
+        # --- Expandable body ---
+        self._body = QWidget(self)
+        self._body.hide()
+        body_layout = QVBoxLayout(self._body)
+        body_layout.setContentsMargins(20, 4, 20, 12)
+        body_layout.setSpacing(6)
+
+        for r in records:
+            vc = _VersionCard(r, self._body)
+            vc.restore_clicked.connect(self.restore_requested.emit)
+            body_layout.addWidget(vc)
+            self._version_cards.append(vc)
+
+        main.addWidget(self._body)
+
+        # Click the header to expand/collapse
+        header.mousePressEvent = lambda e: self._toggle()
+
+    def _toggle(self) -> None:
+        self._expanded = not self._expanded
+        self._body.setVisible(self._expanded)
+        self._chevron.setIcon(
+            FIF.CHEVRON_DOWN if self._expanded else FIF.CHEVRON_RIGHT
+        )
+        # Adjust height dynamically
+        self.adjustSize()
+
+
+# -----------------------------------------------------------------------
+# Page
+# -----------------------------------------------------------------------
+
 class RestorePage(QWidget):
-    """Page for browsing and restoring backups."""
+    """Page for browsing and restoring backups with card-based UI."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -36,60 +278,74 @@ class RestorePage(QWidget):
         self._backup_manager = None
         self._restore_manager = None
         self._all_backups: dict[str, list[BackupRecord]] = {}
+        self._cards: list[_GameBackupCard] = []
+        self._icon_provider: GameIconProvider | None = None
         self._init_ui()
 
     def set_managers(self, backup_manager, restore_manager) -> None:  # noqa: ANN001
         self._backup_manager = backup_manager
         self._restore_manager = restore_manager
 
+    def set_icon_provider(self, provider: GameIconProvider) -> None:
+        self._icon_provider = provider
+
     # ------------------------------------------------------------------
     # UI Setup
     # ------------------------------------------------------------------
 
     def _init_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(36, 20, 36, 20)
-        layout.setSpacing(16)
+        page_layout = QVBoxLayout(self)
+        page_layout.setContentsMargins(36, 20, 36, 20)
+        page_layout.setSpacing(12)
 
         title = SubtitleLabel(t("restore.title"), self)
         desc = BodyLabel(t("restore.description"), self)
         desc.setWordWrap(True)
-        layout.addWidget(title)
-        layout.addWidget(desc)
+        page_layout.addWidget(title)
+        page_layout.addWidget(desc)
 
         # Action bar
         action_bar = QHBoxLayout()
+        action_bar.setSpacing(12)
+
         refresh_btn = PushButton(FIF.SYNC, t("common.refresh"), self)
         refresh_btn.clicked.connect(self._refresh_backups)
         action_bar.addWidget(refresh_btn)
 
-        self._restore_btn = PrimaryPushButton(FIF.HISTORY, t("restore.restore_selected"), self)
-        self._restore_btn.setFixedWidth(160)
-        self._restore_btn.clicked.connect(self._on_restore)
-        action_bar.addWidget(self._restore_btn)
+        self._count_badge = InfoBadge.attension("0", parent=self)
+        self._count_badge.setFixedHeight(20)
+        action_bar.addWidget(self._count_badge)
+
+        action_bar.addStretch()
 
         self._progress = ProgressRing(self)
         self._progress.setFixedSize(24, 24)
         self._progress.hide()
         action_bar.addWidget(self._progress)
 
-        self._status_label = BodyLabel("", self)
+        self._status_label = CaptionLabel("", self)
         action_bar.addWidget(self._status_label)
-        action_bar.addStretch()
-        layout.addLayout(action_bar)
 
-        # Tree widget for backups
-        self._tree = TreeWidget(self)
-        self._tree.setColumnCount(4)
-        self._tree.setHeaderLabels([
-            t("scan.game_name"),
-            t("restore.version"),
-            t("restore.backup_time"),
-            t("scan.emulator"),
-        ])
-        self._tree.header().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self._tree.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        layout.addWidget(self._tree, stretch=1)
+        page_layout.addLayout(action_bar)
+
+        # Scrollable card area
+        self._scroll = SmoothScrollArea(self)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self._scroll_inner = QWidget()
+        self._card_layout = QVBoxLayout(self._scroll_inner)
+        self._card_layout.setContentsMargins(0, 0, 8, 0)
+        self._card_layout.setSpacing(10)
+        self._card_layout.addStretch()
+        self._scroll.setWidget(self._scroll_inner)
+        page_layout.addWidget(self._scroll, stretch=1)
+
+        # Empty state
+        self._empty_label = BodyLabel(t("backup.no_backups"), self)
+        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_label.setStyleSheet("color: #888;")
+        page_layout.addWidget(self._empty_label)
+        self._empty_label.hide()
 
     # ------------------------------------------------------------------
     # Refresh
@@ -99,60 +355,50 @@ class RestorePage(QWidget):
         if self._backup_manager is None:
             return
         self._all_backups = self._backup_manager.list_all_backups()
-        self._refresh_tree()
+        self._refresh_cards()
 
-    def _refresh_tree(self) -> None:
-        self._tree.clear()
-        for key, records in self._all_backups.items():
+    def _refresh_cards(self) -> None:
+        for card in self._cards:
+            self._card_layout.removeWidget(card)
+            card.deleteLater()
+        self._cards.clear()
+
+        if not self._all_backups:
+            self._scroll.hide()
+            self._empty_label.show()
+            self._count_badge.setText("0")
+            return
+
+        self._empty_label.hide()
+        self._scroll.show()
+
+        total_backups = 0
+        for key in sorted(self._all_backups):
+            records = self._all_backups[key]
             if not records:
                 continue
+            total_backups += len(records)
             latest = records[0]
-            game_item = QTreeWidgetItem([
-                latest.game_save.game_name,
-                f"{len(records)} {t('backup.backup_count').lower()}",
-                latest.display_time,
-                latest.game_save.emulator,
-            ])
-            # Add version history as children
-            for r in records:
-                pin_marker = " [P]" if r.is_pinned else ""
-                label_marker = f" ({r.label})" if r.label else ""
-                child = QTreeWidgetItem([
-                    f"  v{r.version}{pin_marker}{label_marker}",
-                    str(r.version),
-                    r.display_time,
-                    r.game_save.emulator,
-                ])
-                child.setData(0, Qt.ItemDataRole.UserRole, r)
-                game_item.addChild(child)
-            self._tree.addTopLevelItem(game_item)
+            card = _GameBackupCard(
+                game_name=latest.game_save.game_name,
+                emulator=latest.game_save.emulator,
+                game_id=latest.game_save.game_id,
+                records=records,
+                icon_provider=self._icon_provider,
+                parent=self._scroll_inner,
+            )
+            card.restore_requested.connect(self._on_restore)
+            self._card_layout.insertWidget(self._card_layout.count() - 1, card)
+            self._cards.append(card)
+
+        self._count_badge.setText(str(total_backups))
 
     # ------------------------------------------------------------------
     # Restore action
     # ------------------------------------------------------------------
 
-    def _on_restore(self) -> None:
+    def _on_restore(self, record: BackupRecord) -> None:
         if self._restore_manager is None:
-            return
-
-        items = self._tree.selectedItems()
-        if not items:
-            InfoBar.warning(
-                title=t("common.warning"),
-                content=t("restore.restore_selected"),
-                parent=self,
-                position=InfoBarPosition.TOP,
-                duration=3000,
-            )
-            return
-
-        item = items[0]
-        record: BackupRecord | None = item.data(0, Qt.ItemDataRole.UserRole)
-        if record is None:
-            # User selected a parent node; select the latest child
-            if item.childCount() > 0:
-                record = item.child(0).data(0, Qt.ItemDataRole.UserRole)
-        if record is None:
             return
 
         # Preview and confirm
@@ -169,22 +415,20 @@ class RestorePage(QWidget):
                 return
 
         self._progress.show()
+        self._status_label.setText(t("restore.restoring"))
         errors = self._restore_manager.restore_backup(record, force=True)
         self._progress.hide()
+        self._status_label.setText("")
 
         if errors:
             InfoBar.warning(
                 title=t("restore.restore_complete"),
                 content="\n".join(errors),
-                parent=self,
-                position=InfoBarPosition.TOP,
-                duration=5000,
+                parent=self, position=InfoBarPosition.TOP, duration=5000,
             )
         else:
             InfoBar.success(
                 title=t("restore.restore_complete"),
                 content=t("restore.restore_success", count="1"),
-                parent=self,
-                position=InfoBarPosition.TOP,
-                duration=3000,
+                parent=self, position=InfoBarPosition.TOP, duration=3000,
             )

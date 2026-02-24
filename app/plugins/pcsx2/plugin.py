@@ -35,6 +35,12 @@ _SAVESTATE_RE = re.compile(
     r'^([A-Z]{4}-\d{5})\s*\(([0-9A-Fa-f]{8})\)'
 )
 
+# Pattern to find a PS2 product serial anywhere in a string.
+# PCSX2 uses a simple substring-contains match (see FilterMatches in
+# MemoryCardFolder.cpp).  We mirror that with a regex search so serials
+# are extracted regardless of prefix/suffix.
+_SERIAL_RE = re.compile(r'([A-Z]{4}-\d{5})')
+
 
 def _read_ps2_superblock(data: bytes) -> dict | None:
     """Read the PS2 memory card superblock (first page)."""
@@ -148,21 +154,24 @@ def _read_root_directory_entries(data: bytes, superblock: dict) -> list[dict]:
 
 
 def _extract_game_id_from_dirname(dirname: str) -> str:
-    """Extract a game serial from a PS2 save directory name.
+    """Extract a PS2 game serial (product code) from a save directory name.
 
-    PS2 save directories are typically named like:
-      BADATA-SYSTEM         (system data)
-      BASLUS-21005INGS001   (game serial + save suffix)
-      BESLES-12345SAVE00
+    PS2 save directories are named by the game itself.  Common patterns::
 
-    The serial is the first 11 characters following the initial 2-char region prefix.
+        BADATA-SYSTEM           → system data, no game serial
+        BISLPS-25733OGS         → serial SLPS-25733
+        BISLPS-25733OGS100      → serial SLPS-25733
+        BASLUS-21005INGS001     → serial SLUS-21005
+        BESLES-12345SAVE00      → serial SLES-12345
+
+    PCSX2's own ``FilterMatches()`` uses a substring-contains check
+    (see ``MemoryCardFolder.cpp``), so we do the same: search for the
+    first occurrence of the ``XXXX-NNNNN`` serial pattern anywhere in
+    the directory name.
     """
-    # Common format: 2-char prefix + serial (e.g. "BASLUS-21005...")
-    if len(dirname) >= 12:
-        potential = dirname[2:13]  # e.g. "SLUS-21005I"
-        # Check if it looks like a serial (XXXX-NNNNN)
-        if len(potential) >= 10 and potential[4] == "-" and potential[5:10].isdigit():
-            return potential[:10]  # e.g. "SLUS-21005"
+    match = _SERIAL_RE.search(dirname)
+    if match:
+        return match.group(1)
     # Fallback: return the directory name itself
     return dirname
 
@@ -443,9 +452,7 @@ class PCSX2Plugin(EmulatorPlugin):
         if memcards_dir and memcards_dir.exists():
             logger.info("Scanning PCSX2 memory cards in {}", memcards_dir)
             for item in memcards_dir.iterdir():
-                if item.is_file() and item.suffix.lower() in (".ps2", ".mcr", ".mcd", ".bin", ".mc2"):
-                    all_saves.extend(_scan_memcard_file(item))
-                elif item.is_dir() and (item / "_pcsx2_superblock").exists():
+                if item.is_dir() and (item / "_pcsx2_superblock").exists():
                     all_saves.extend(_scan_folder_memcard(item))
 
         # Scan save states
@@ -459,9 +466,7 @@ class PCSX2Plugin(EmulatorPlugin):
             for cp in custom_paths:
                 if cp.is_dir():
                     for item in cp.iterdir():
-                        if item.is_file() and item.suffix.lower() in (".ps2", ".mcr", ".mcd"):
-                            all_saves.extend(_scan_memcard_file(item))
-                        elif item.is_dir() and (item / "_pcsx2_superblock").exists():
+                        if item.is_dir() and (item / "_pcsx2_superblock").exists():
                             all_saves.extend(_scan_folder_memcard(item))
 
         # --- Merge CRC32 across save types for the same serial ---

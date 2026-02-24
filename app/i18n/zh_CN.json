@@ -44,7 +44,9 @@
         "unpin": "取消固定",
         "label": "标签",
         "backup_success": "成功备份 {count} 个游戏存档",
-        "backup_fail": "备份失败: {error}"
+        "backup_fail": "备份失败: {error}",
+        "no_selection": "请先选择要备份的存档",
+        "file_group": "{type} ({count} 个文件)"
     },
     "restore": {
         "title": "存档还原",
@@ -96,20 +98,32 @@
     },
     "settings": {
         "title": "设置",
+        "description": "自定义应用外观、备份和同步选项",
+        "general_group": "通用设置",
+        "backup_group": "备份设置",
+        "sync_group": "同步设置",
         "language": "界面语言",
+        "language_desc": "选择界面显示语言，更改后需重启生效",
         "theme": "主题",
+        "theme_desc": "选择应用主题配色方案",
         "theme_light": "浅色",
         "theme_dark": "深色",
         "theme_auto": "跟随系统",
         "backup_dir": "备份目录",
+        "backup_dir_desc": "存档备份文件的存放位置",
         "sync_dir": "同步目录",
+        "sync_dir_desc": "用于多设备同步的共享文件夹路径",
         "choose_dir": "选择目录",
         "max_backups": "每个游戏最大备份数",
+        "max_backups_desc": "超出时自动删除最早的备份",
         "auto_scan": "启动时自动扫描",
+        "auto_scan_desc": "应用启动后自动检测模拟器和存档",
         "auto_sync": "启动时自动同步",
+        "auto_sync_desc": "应用启动后自动同步远端存档",
         "emulator_paths": "模拟器自定义路径",
         "save_success": "设置已保存",
-        "about": "关于"
+        "about": "关于",
+        "about_desc": "跨平台模拟器存档管理与多端同步工具"
     },
     "common": {
         "confirm": "确定",
@@ -136,7 +150,7 @@
         "memcard": "存储卡",
         "battery": "电池存档",
         "savestate": "即时存档",
-        "folder": "文件夹",
+        "folder": "记忆卡",
         "file": "文件"
     }
 }

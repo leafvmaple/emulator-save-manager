@@ -44,7 +44,9 @@
         "unpin": "固定解除",
         "label": "ラベル",
         "backup_success": "{count} 個のセーブをバックアップしました",
-        "backup_fail": "バックアップ失敗: {error}"
+        "backup_fail": "バックアップ失敗: {error}",
+        "no_selection": "バックアップするセーブを選択してください",
+        "file_group": "{type} ({count} ファイル)"
     },
     "restore": {
         "title": "セーブ復元",
@@ -96,20 +98,32 @@
     },
     "settings": {
         "title": "設定",
+        "description": "外観、バックアップ、同期オプションをカスタマイズ",
+        "general_group": "一般設定",
+        "backup_group": "バックアップ設定",
+        "sync_group": "同期設定",
         "language": "言語",
+        "language_desc": "表示言語を選択します。変更後は再起動が必要です",
         "theme": "テーマ",
+        "theme_desc": "アプリのカラースキームを選択",
         "theme_light": "ライト",
         "theme_dark": "ダーク",
         "theme_auto": "システムに従う",
         "backup_dir": "バックアップディレクトリ",
+        "backup_dir_desc": "セーブデータバックアップの保存先",
         "sync_dir": "同期ディレクトリ",
+        "sync_dir_desc": "マルチデバイス同期用の共有フォルダパス",
         "choose_dir": "ディレクトリを選択",
         "max_backups": "ゲームごとの最大バックアップ数",
+        "max_backups_desc": "超過時に古いバックアップを自動削除",
         "auto_scan": "起動時に自動スキャン",
+        "auto_scan_desc": "起動後にエミュレータとセーブを自動検出",
         "auto_sync": "起動時に自動同期",
+        "auto_sync_desc": "起動後にリモートセーブを自動同期",
         "emulator_paths": "エミュレータカスタムパス",
         "save_success": "設定を保存しました",
-        "about": "について"
+        "about": "について",
+        "about_desc": "クロスプラットフォームエミュレータセーブ管理・同期ツール"
     },
     "common": {
         "confirm": "OK",
@@ -136,7 +150,7 @@
         "memcard": "メモリーカード",
         "battery": "バッテリーセーブ",
         "savestate": "ステートセーブ",
-        "folder": "フォルダ",
+        "folder": "メモリーカード",
         "file": "ファイル"
     }
 }

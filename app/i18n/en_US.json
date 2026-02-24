@@ -44,7 +44,9 @@
         "unpin": "Unpin",
         "label": "Label",
         "backup_success": "Successfully backed up {count} saves",
-        "backup_fail": "Backup failed: {error}"
+        "backup_fail": "Backup failed: {error}",
+        "no_selection": "Please select saves to back up first",
+        "file_group": "{type} ({count} files)"
     },
     "restore": {
         "title": "Save Restore",
@@ -96,20 +98,32 @@
     },
     "settings": {
         "title": "Settings",
+        "description": "Customize appearance, backup and sync options",
+        "general_group": "General",
+        "backup_group": "Backup",
+        "sync_group": "Sync",
         "language": "Language",
+        "language_desc": "Select the display language; restart required to apply",
         "theme": "Theme",
+        "theme_desc": "Choose the application colour scheme",
         "theme_light": "Light",
         "theme_dark": "Dark",
         "theme_auto": "System",
         "backup_dir": "Backup Directory",
+        "backup_dir_desc": "Location where save backups are stored",
         "sync_dir": "Sync Directory",
+        "sync_dir_desc": "Shared folder path for multi-device sync",
         "choose_dir": "Choose Directory",
         "max_backups": "Max Backups Per Game",
+        "max_backups_desc": "Oldest backups are auto-deleted when exceeded",
         "auto_scan": "Auto-scan on Startup",
+        "auto_scan_desc": "Automatically detect emulators and saves after launch",
         "auto_sync": "Auto-sync on Startup",
+        "auto_sync_desc": "Automatically sync remote saves after launch",
         "emulator_paths": "Emulator Custom Paths",
         "save_success": "Settings saved",
-        "about": "About"
+        "about": "About",
+        "about_desc": "Cross-platform emulator save manager and multi-device sync tool"
     },
     "common": {
         "confirm": "OK",
@@ -136,7 +150,7 @@
         "memcard": "Memory Card",
         "battery": "Battery Save",
         "savestate": "Save State",
-        "folder": "Folder",
+        "folder": "Memory Card",
         "file": "File"
     }
 }

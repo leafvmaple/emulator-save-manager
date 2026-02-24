@@ -1,23 +1,39 @@
-"""Settings page — application preferences."""
+"""Settings page — application preferences with Fluent-style cards.
+
+Wraps all groups in a SmoothScrollArea so content is scrollable when the
+window is small.  Each setting card has a meaningful description line.
+An *About* section is added at the bottom.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QFileDialog
-from qfluentwidgets import (
-    SubtitleLabel, BodyLabel, SettingCardGroup,
-    ComboBoxSettingCard, PushSettingCard, RangeSettingCard,
-    SwitchSettingCard, FluentIcon as FIF, InfoBar, InfoBarPosition,
-    setTheme, Theme, OptionsSettingCard,
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QSizePolicy,
 )
-from qfluentwidgets import ConfigItem, OptionsConfigItem, RangeConfigItem, BoolValidator, OptionsValidator, RangeValidator, qconfig, QConfig
+from qfluentwidgets import (
+    SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
+    SettingCardGroup, ComboBoxSettingCard, PushSettingCard,
+    RangeSettingCard, SwitchSettingCard, FluentIcon as FIF,
+    InfoBar, InfoBarPosition, setTheme, Theme,
+    CardWidget, SmoothScrollArea, IconWidget, setFont,
+)
+from qfluentwidgets import (
+    ConfigItem, OptionsConfigItem, RangeConfigItem,
+    BoolValidator, OptionsValidator, RangeValidator, QConfig,
+)
+from PySide6.QtGui import QFont
 from loguru import logger
 
-from app.i18n import t, set_language, init as i18n_init
+from app.i18n import t, set_language
 from app.config import Config
 
+
+# -----------------------------------------------------------------------
+# QConfig wrapper (unchanged)
+# -----------------------------------------------------------------------
 
 class _AppQConfig(QConfig):
     """Thin wrapper connecting app config to qfluentwidgets' QConfig system."""
@@ -44,8 +60,50 @@ class _AppQConfig(QConfig):
 _app_qconfig = _AppQConfig()
 
 
+# -----------------------------------------------------------------------
+# About card
+# -----------------------------------------------------------------------
+
+class _AboutCard(CardWidget):
+    """Simple card showing app name, version and description."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setFixedHeight(100)
+
+        root = QHBoxLayout(self)
+        root.setContentsMargins(20, 16, 20, 16)
+        root.setSpacing(16)
+
+        icon = IconWidget(FIF.INFO, self)
+        icon.setFixedSize(36, 36)
+        root.addWidget(icon, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        col = QVBoxLayout()
+        col.setSpacing(4)
+        col.setContentsMargins(0, 0, 0, 0)
+
+        name = StrongBodyLabel(t("app.name"), self)
+        setFont(name, 15, QFont.Weight.DemiBold)
+        col.addWidget(name)
+
+        ver = CaptionLabel(f"v{t('app.version')}", self)
+        ver.setStyleSheet("color:#888;")
+        col.addWidget(ver)
+
+        desc = CaptionLabel(t("settings.about_desc"), self)
+        desc.setStyleSheet("color:#666;")
+        col.addWidget(desc)
+
+        root.addLayout(col, 1)
+
+
+# -----------------------------------------------------------------------
+# Page
+# -----------------------------------------------------------------------
+
 class SettingsPage(QWidget):
-    """Settings page with Fluent-style setting cards."""
+    """Settings page with Fluent-style setting cards inside a scroll area."""
 
     language_changed = Signal(str)
     theme_changed = Signal(str)
@@ -65,21 +123,33 @@ class SettingsPage(QWidget):
     # ------------------------------------------------------------------
 
     def _init_ui(self) -> None:
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        scroll = SmoothScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
         layout.setContentsMargins(36, 20, 36, 20)
         layout.setSpacing(20)
 
-        title = SubtitleLabel(t("settings.title"), self)
+        # Title
+        title = SubtitleLabel(t("settings.title"), container)
+        desc = BodyLabel(t("settings.description"), container)
+        desc.setWordWrap(True)
         layout.addWidget(title)
+        layout.addWidget(desc)
 
         # --- General group ---
-        general_group = SettingCardGroup(t("settings.title"), self)
+        general_group = SettingCardGroup(t("settings.general_group"), container)
 
         self._lang_card = ComboBoxSettingCard(
             _app_qconfig.language,
             FIF.LANGUAGE,
             t("settings.language"),
-            "",
+            t("settings.language_desc"),
             ["中文", "English", "日本語"],
             parent=general_group,
         )
@@ -89,7 +159,7 @@ class SettingsPage(QWidget):
             _app_qconfig.theme_mode,
             FIF.BRUSH,
             t("settings.theme"),
-            "",
+            t("settings.theme_desc"),
             [t("settings.theme_auto"), t("settings.theme_light"), t("settings.theme_dark")],
             parent=general_group,
         )
@@ -98,13 +168,13 @@ class SettingsPage(QWidget):
         layout.addWidget(general_group)
 
         # --- Backup group ---
-        backup_group = SettingCardGroup(t("backup.title"), self)
+        backup_group = SettingCardGroup(t("settings.backup_group"), container)
 
         self._backup_dir_card = PushSettingCard(
             t("settings.choose_dir"),
             FIF.FOLDER,
             t("settings.backup_dir"),
-            "",
+            t("settings.backup_dir_desc"),
             parent=backup_group,
         )
         self._backup_dir_card.clicked.connect(self._choose_backup_dir)
@@ -114,7 +184,7 @@ class SettingsPage(QWidget):
             _app_qconfig.max_backups,
             FIF.HISTORY,
             t("settings.max_backups"),
-            "",
+            t("settings.max_backups_desc"),
             parent=backup_group,
         )
         backup_group.addSettingCard(self._max_backup_card)
@@ -122,13 +192,13 @@ class SettingsPage(QWidget):
         layout.addWidget(backup_group)
 
         # --- Sync group ---
-        sync_group = SettingCardGroup(t("sync.title"), self)
+        sync_group = SettingCardGroup(t("settings.sync_group"), container)
 
         self._sync_dir_card = PushSettingCard(
             t("settings.choose_dir"),
             FIF.SYNC,
             t("settings.sync_dir"),
-            "",
+            t("settings.sync_dir_desc"),
             parent=sync_group,
         )
         self._sync_dir_card.clicked.connect(self._choose_sync_dir)
@@ -137,7 +207,7 @@ class SettingsPage(QWidget):
         self._auto_scan_card = SwitchSettingCard(
             FIF.SEARCH,
             t("settings.auto_scan"),
-            "",
+            t("settings.auto_scan_desc"),
             _app_qconfig.auto_scan,
             parent=sync_group,
         )
@@ -146,7 +216,7 @@ class SettingsPage(QWidget):
         self._auto_sync_card = SwitchSettingCard(
             FIF.SYNC,
             t("settings.auto_sync"),
-            "",
+            t("settings.auto_sync_desc"),
             _app_qconfig.auto_sync,
             parent=sync_group,
         )
@@ -154,7 +224,16 @@ class SettingsPage(QWidget):
 
         layout.addWidget(sync_group)
 
+        # --- About ---
+        about_group = SettingCardGroup(t("settings.about"), container)
+        self._about_card = _AboutCard(about_group)
+        about_group.addSettingCard(self._about_card)
+        layout.addWidget(about_group)
+
         layout.addStretch()
+
+        scroll.setWidget(container)
+        outer.addWidget(scroll)
 
         # Connect signals
         _app_qconfig.language.valueChanged.connect(self._on_language_changed)

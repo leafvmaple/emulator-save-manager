@@ -1,4 +1,8 @@
-"""Sync engine — bidirectional sync through a shared local folder (e.g. OneDrive, 坚果云)."""
+"""Sync engine — bidirectional sync through a shared local folder (e.g. OneDrive, 坚果云).
+
+Backup archives are stored as ``{timestamp}.zip`` + ``{timestamp}.json``
+pairs.  The sync engine copies these pairs to/from the shared folder.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,7 @@ from loguru import logger
 
 from app.config import Config
 from app.core.backup import BackupManager
-from app.core.conflict import ConflictDetector, ConflictInfo, ConflictResolution, file_sha256, dir_sha256
+from app.core.conflict import ConflictDetector, ConflictInfo, ConflictResolution, file_sha256
 
 
 SYNC_MANIFEST = "sync_manifest.json"
@@ -86,9 +90,11 @@ class SyncManager:
             return result
 
         latest = backups[0]  # newest first
+        local_zip = latest.backup_path
+        local_meta = local_zip.with_suffix(".json")
 
         # --- CRC32 version check ---
-        local_crc = self._read_backup_crc32(latest.backup_path)
+        local_crc = self._read_meta_field(local_meta, "crc32")
         if local_crc:
             is_mismatch, remote_crc = self.check_crc32_mismatch(
                 emulator, game_id, local_crc,
@@ -98,32 +104,34 @@ class SyncManager:
                     f"{emulator}:{game_id} — local CRC {local_crc}, remote CRC {remote_crc}"
                 )
 
-        dest_dir = self.sync_root / emulator / game_id / latest.folder_name
+        dest_dir = self.sync_root / emulator / game_id
         dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_zip = dest_dir / local_zip.name
+        dest_meta = dest_dir / local_meta.name
 
         # Check for conflict with existing remote version
-        if dest_dir.exists() and any(dest_dir.iterdir()):
-            local_hash = dir_sha256(latest.backup_path)
-            remote_hash = dir_sha256(dest_dir)
+        if dest_zip.exists():
+            local_hash = file_sha256(local_zip)
+            remote_hash = file_sha256(dest_zip)
             if local_hash == remote_hash:
                 logger.info("Push skipped — already in sync: {}:{}", emulator, game_id)
                 return result
             conflict = self._detector.detect(
-                latest.backup_path, dest_dir,
+                local_zip, dest_zip,
                 game_id=game_id, emulator=emulator,
             )
             if conflict and conflict.is_real_conflict:
                 result.conflicts.append(conflict)
                 return result
 
-        # Copy backup to sync folder
+        # Copy zip + meta to sync folder
         try:
-            if dest_dir.exists():
-                shutil.rmtree(dest_dir)
-            shutil.copytree(latest.backup_path, dest_dir)
+            shutil.copy2(local_zip, dest_zip)
+            if local_meta.exists():
+                shutil.copy2(local_meta, dest_meta)
             result.pushed = 1
-            logger.info("Pushed backup {}:{} → {}", emulator, game_id, dest_dir)
-            self._update_manifest(emulator, game_id, latest.folder_name, dest_dir)
+            logger.info("Pushed backup {}:{} → {}", emulator, game_id, dest_zip)
+            self._update_manifest(emulator, game_id, local_zip.stem, dest_zip)
         except Exception as e:
             msg = f"Push failed for {emulator}:{game_id}: {e}"
             logger.error(msg)
@@ -146,23 +154,25 @@ class SyncManager:
         if not remote_game_dir.exists():
             return result
 
-        # Find latest backup in remote
-        remote_backups = sorted(
-            [d for d in remote_game_dir.iterdir() if d.is_dir()],
-            key=lambda d: d.name,
+        # Find latest zip in remote
+        remote_zips = sorted(
+            remote_game_dir.glob("*.zip"),
+            key=lambda p: p.name,
             reverse=True,
         )
-        if not remote_backups:
+        if not remote_zips:
             return result
 
-        latest_remote = remote_backups[0]
+        latest_remote_zip = remote_zips[0]
+        latest_remote_meta = latest_remote_zip.with_suffix(".json")
 
         # --- CRC32 version check ---
-        remote_crc = self._read_backup_crc32(latest_remote)
+        remote_crc = self._read_meta_field(latest_remote_meta, "crc32")
         if remote_crc:
             local_backups_tmp = self._bm.list_backups(emulator, game_id)
             if local_backups_tmp:
-                local_crc = self._read_backup_crc32(local_backups_tmp[0].backup_path)
+                local_meta = local_backups_tmp[0].backup_path.with_suffix(".json")
+                local_crc = self._read_meta_field(local_meta, "crc32")
                 if local_crc and local_crc.lower() != remote_crc.lower():
                     result.crc32_warnings.append(
                         f"{emulator}:{game_id} — local CRC {local_crc}, remote CRC {remote_crc}"
@@ -172,30 +182,33 @@ class SyncManager:
         local_backups = self._bm.list_backups(emulator, game_id)
         if local_backups:
             latest_local = local_backups[0]
-            local_hash = dir_sha256(latest_local.backup_path)
-            remote_hash = dir_sha256(latest_remote)
+            local_hash = file_sha256(latest_local.backup_path)
+            remote_hash = file_sha256(latest_remote_zip)
             if local_hash == remote_hash:
                 logger.info("Pull skipped — already in sync: {}:{}", emulator, game_id)
                 return result
 
             # Check for conflict
             conflict = self._detector.detect(
-                latest_local.backup_path, latest_remote,
+                latest_local.backup_path, latest_remote_zip,
                 game_id=game_id, emulator=emulator,
-                remote_machine=self._read_remote_machine(latest_remote),
+                remote_machine=self._read_meta_field(latest_remote_meta, "source_machine"),
             )
             if conflict and conflict.is_real_conflict:
                 result.conflicts.append(conflict)
                 return result
 
-        # Copy remote backup to local
-        dest_dir = self._bm.backup_root / emulator / game_id / latest_remote.name
+        # Copy remote zip + meta to local backup root
+        dest_dir = self._bm.backup_root / emulator / game_id
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_zip = dest_dir / latest_remote_zip.name
+        dest_meta = dest_dir / latest_remote_meta.name
         try:
-            if dest_dir.exists():
-                shutil.rmtree(dest_dir)
-            shutil.copytree(latest_remote, dest_dir)
+            shutil.copy2(latest_remote_zip, dest_zip)
+            if latest_remote_meta.exists():
+                shutil.copy2(latest_remote_meta, dest_meta)
             result.pulled = 1
-            logger.info("Pulled backup {}:{} ← {}", emulator, game_id, latest_remote)
+            logger.info("Pulled backup {}:{} ← {}", emulator, game_id, latest_remote_zip)
         except Exception as e:
             msg = f"Pull failed for {emulator}:{game_id}: {e}"
             logger.error(msg)
@@ -231,6 +244,9 @@ class SyncManager:
                 for game_dir in emu_dir.iterdir():
                     if not game_dir.is_dir():
                         continue
+                    # Only pull if the remote dir contains zip files
+                    if not any(game_dir.glob("*.zip")):
+                        continue
                     emulator = emu_dir.name
                     game_id = game_dir.name
                     r = self.pull(emulator, game_id)
@@ -255,41 +271,29 @@ class SyncManager:
         errors: list[str] = []
         try:
             if resolution == ConflictResolution.USE_LOCAL:
-                # Overwrite remote with local
-                if conflict.remote_path.exists():
-                    if conflict.remote_path.is_dir():
-                        shutil.rmtree(conflict.remote_path)
-                    else:
-                        conflict.remote_path.unlink()
-                if conflict.local_path.is_dir():
-                    shutil.copytree(conflict.local_path, conflict.remote_path)
-                else:
-                    shutil.copy2(conflict.local_path, conflict.remote_path)
+                # Overwrite remote with local (zip + meta pair)
+                for ext in (".zip", ".json"):
+                    src = conflict.local_path.with_suffix(ext)
+                    dst = conflict.remote_path.with_suffix(ext)
+                    if src.exists():
+                        shutil.copy2(src, dst)
                 logger.info("Conflict resolved: USE_LOCAL for {}", conflict.game_id)
 
             elif resolution == ConflictResolution.USE_REMOTE:
-                # Overwrite local with remote
-                if conflict.local_path.exists():
-                    if conflict.local_path.is_dir():
-                        shutil.rmtree(conflict.local_path)
-                    else:
-                        conflict.local_path.unlink()
-                if conflict.remote_path.is_dir():
-                    shutil.copytree(conflict.remote_path, conflict.local_path)
-                else:
-                    shutil.copy2(conflict.remote_path, conflict.local_path)
+                for ext in (".zip", ".json"):
+                    src = conflict.remote_path.with_suffix(ext)
+                    dst = conflict.local_path.with_suffix(ext)
+                    if src.exists():
+                        shutil.copy2(src, dst)
                 logger.info("Conflict resolved: USE_REMOTE for {}", conflict.game_id)
 
             elif resolution == ConflictResolution.KEEP_BOTH:
-                # Rename the remote with a suffix and copy it beside local
                 suffix = f"_conflict_{conflict.remote_machine or 'remote'}"
-                if conflict.local_path.is_dir():
-                    alt = conflict.local_path.parent / (conflict.local_path.name + suffix)
-                    shutil.copytree(conflict.remote_path, alt, dirs_exist_ok=True)
-                else:
-                    stem = conflict.local_path.stem + suffix
-                    alt = conflict.local_path.parent / (stem + conflict.local_path.suffix)
-                    shutil.copy2(conflict.remote_path, alt)
+                for ext in (".zip", ".json"):
+                    src = conflict.remote_path.with_suffix(ext)
+                    if src.exists():
+                        alt = src.parent / (conflict.local_path.stem + suffix + ext)
+                        shutil.copy2(src, alt)
                 logger.info("Conflict resolved: KEEP_BOTH for {}", conflict.game_id)
 
         except Exception as e:
@@ -304,7 +308,7 @@ class SyncManager:
     # ------------------------------------------------------------------
 
     def _update_manifest(
-        self, emulator: str, game_id: str, backup_name: str, backup_dir: Path
+        self, emulator: str, game_id: str, backup_name: str, backup_zip: Path
     ) -> None:
         manifest_path = self.sync_root / SYNC_MANIFEST
         manifest: dict = {}
@@ -315,15 +319,16 @@ class SyncManager:
             except Exception:
                 manifest = {}
 
+        meta_path = backup_zip.with_suffix(".json")
         key = f"{emulator}:{game_id}"
         manifest[key] = {
             "game_id": game_id,
             "emulator": emulator,
             "last_sync_time": datetime.now().isoformat(),
             "source_machine": self._cfg.machine_id,
-            "file_hash": dir_sha256(backup_dir),
-            "relative_path": f"{emulator}/{game_id}/{backup_name}",
-            "crc32": self._read_backup_crc32(backup_dir),
+            "file_hash": file_sha256(backup_zip),
+            "relative_path": f"{emulator}/{game_id}/{backup_zip.name}",
+            "crc32": self._read_meta_field(meta_path, "crc32"),
         }
 
         try:
@@ -332,25 +337,14 @@ class SyncManager:
         except Exception as e:
             logger.error("Failed to update sync manifest: {}", e)
 
-    def _read_remote_machine(self, backup_dir: Path) -> str:
-        info_path = backup_dir / "backup_info.json"
-        if info_path.exists():
+    @staticmethod
+    def _read_meta_field(meta_path: Path, field: str) -> str:
+        """Read a single field from a sidecar .json metadata file."""
+        if meta_path.exists():
             try:
-                with open(info_path, "r", encoding="utf-8") as f:
+                with open(meta_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                return data.get("source_machine", "")
-            except Exception:
-                pass
-        return ""
-
-    def _read_backup_crc32(self, backup_dir: Path) -> str:
-        """Read CRC32 from a backup's backup_info.json."""
-        info_path = backup_dir / "backup_info.json"
-        if info_path.exists():
-            try:
-                with open(info_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                return data.get("crc32", "")
+                return data.get(field, "")
             except Exception:
                 pass
         return ""

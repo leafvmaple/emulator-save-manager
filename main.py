@@ -15,6 +15,7 @@ from app.core.scanner import Scanner
 from app.core.backup import BackupManager
 from app.core.restore import RestoreManager
 from app.core.sync import SyncManager
+from app.core.game_icon import GameIconProvider
 from app.ui.main_window import MainWindow
 
 
@@ -40,6 +41,7 @@ def main() -> None:
     backup_mgr = BackupManager(config)
     restore_mgr = RestoreManager()
     sync_mgr = SyncManager(config, backup_mgr)
+    icon_provider = GameIconProvider(config.data_dir / "icons")
 
     # ---- 6. Qt Application ----
     QApplication.setHighDpiScaleFactorRoundingPolicy(
@@ -52,8 +54,11 @@ def main() -> None:
 
     # Wire services into UI pages
     window.scan_page.set_scanner(scanner)
+    window.scan_page.set_icon_provider(icon_provider)
     window.backup_page.set_backup_manager(backup_mgr)
+    window.backup_page.set_icon_provider(icon_provider)
     window.restore_page.set_managers(backup_mgr, restore_mgr)
+    window.restore_page.set_icon_provider(icon_provider)
     window.sync_page.set_sync_manager(sync_mgr)
     window.sync_page.set_config(config)
     window.settings_page.set_config(config)
