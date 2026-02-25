@@ -32,8 +32,9 @@ jobs:
     name: Bump version & changelog
     runs-on: ubuntu-latest
     outputs:
-      new_version: ${{ steps.bump.outputs.new_version }}
-      tag_name:    ${{ steps.bump.outputs.tag_name }}
+      new_version:  ${{ steps.bump.outputs.new_version }}
+      tag_name:     ${{ steps.bump.outputs.tag_name }}
+      release_sha:  ${{ steps.push.outputs.release_sha }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -134,6 +135,7 @@ jobs:
           cat CHANGELOG.md
 
       - name: Commit version bump & push tag
+        id: push
         shell: bash
         run: |
           set -euo pipefail
@@ -147,6 +149,8 @@ jobs:
           git commit -m "chore(release): ${TAG_NAME}"
           git tag "$TAG_NAME"
           git push origin HEAD --follow-tags
+
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Upload changelog artifact
         uses: actions/upload-artifact@v4
@@ -173,10 +177,10 @@ jobs:
             ext: ""
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout repository (at release tag)
+      - name: Checkout repository (at release commit)
         uses: actions/checkout@v4
         with:
-          ref: v${{ needs.prepare.outputs.new_version }}
+          ref: ${{ needs.prepare.outputs.release_sha }}
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
