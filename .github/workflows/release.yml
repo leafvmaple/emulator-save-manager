@@ -78,12 +78,11 @@ jobs:
           # Find the previous release tag (latest vX.Y.Z tag)
           PREV_TAG=$(git tag --list 'v*' --sort=-version:refname | head -n 1 || true)
 
-          {
-            echo "# ${TAG_NAME} Release Notes"
-            echo ""
-            echo "Released on $(date -u +'%Y-%m-%d')"
-            echo ""
-          } > CHANGELOG.md
+          # Preserve existing changelog content
+          OLD_CHANGELOG=""
+          if [ -f CHANGELOG.md ]; then
+            OLD_CHANGELOG=$(cat CHANGELOG.md)
+          fi
 
           if [ -z "$PREV_TAG" ]; then
             echo "No previous tag found — including all commits."
@@ -113,7 +112,12 @@ jobs:
             fi
           done <<< "$COMMITS"
 
+          # Build new section, then prepend to old content
           {
+            echo "# ${TAG_NAME}"
+            echo ""
+            echo "Released on $(date -u +'%Y-%m-%d')"
+            echo ""
             if [ -n "$FEATURES" ]; then
               echo "## ✨ Features"
               echo ""
@@ -129,7 +133,12 @@ jobs:
               echo ""
               echo -e "$OTHERS"
             fi
-          } >> CHANGELOG.md
+            echo "---"
+            echo ""
+            if [ -n "$OLD_CHANGELOG" ]; then
+              echo "$OLD_CHANGELOG"
+            fi
+          } > CHANGELOG.md
 
           echo "--- CHANGELOG ---"
           cat CHANGELOG.md
