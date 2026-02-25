@@ -142,7 +142,7 @@ class _GameCard(CardWidget):
                 break
 
         root = QHBoxLayout(self)
-        root.setContentsMargins(16, 12, 16, 12)
+        root.setContentsMargins(20, 12, 20, 12)
         root.setSpacing(16)
 
         # --- Checkbox ---
@@ -319,7 +319,7 @@ class BackupPage(QWidget):
         self._scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         self._scroll_inner = QWidget()
         self._card_layout = QVBoxLayout(self._scroll_inner)
-        self._card_layout.setContentsMargins(0, 0, 8, 0)
+        self._card_layout.setContentsMargins(8, 8, 8, 8)
         self._card_layout.setSpacing(8)
         self._card_layout.addStretch()
         self._scroll.setWidget(self._scroll_inner)

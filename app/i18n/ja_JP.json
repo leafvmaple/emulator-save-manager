@@ -28,7 +28,11 @@
         "last_modified": "最終更新",
         "install_path": "インストールパス",
         "data_path": "データパス",
-        "saves_count": "セーブ数"
+        "saves_count": "セーブ数",
+        "files": "ファイル",
+        "file_name": "ファイル名",
+        "show_files": "ファイル一覧を表示",
+        "hide_files": "ファイル一覧を非表示"
     },
     "backup": {
         "title": "セーブバックアップ",

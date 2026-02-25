@@ -28,7 +28,11 @@
         "last_modified": "Last Modified",
         "install_path": "Install Path",
         "data_path": "Data Path",
-        "saves_count": "Saves"
+        "saves_count": "Saves",
+        "files": "files",
+        "file_name": "File Name",
+        "show_files": "Show files",
+        "hide_files": "Hide files"
     },
     "backup": {
         "title": "Save Backup",

@@ -12,7 +12,8 @@ from loguru import logger
 def _default_data_dir() -> Path:
     """Return the default data directory for the application."""
     if platform.system() == "Windows":
-        return Path.home() / "Documents" / "EmulatorSaveManager"
+        from app.core.path_resolver import get_documents_dir
+        return get_documents_dir() / "EmulatorSaveManager"
     elif platform.system() == "Darwin":
         return Path.home() / "Library" / "Application Support" / "EmulatorSaveManager"
     else:

@@ -11,6 +11,7 @@ from pathlib import Path
 from loguru import logger
 
 from app.models.backup_record import BackupRecord
+from app.core.path_resolver import resolve_path
 
 
 @dataclass
@@ -58,7 +59,7 @@ class RestoreManager:
         with zipfile.ZipFile(zip_path, "r") as zf:
             names_set = {zi.filename for zi in zf.infolist()}
             for bp in info.get("backup_paths", []):
-                source_path = Path(bp["source"])
+                source_path = resolve_path(bp["source"])
                 is_dir = bp.get("is_dir", False)
                 zip_prefix = bp.get("zip_path", "")
 
@@ -106,7 +107,7 @@ class RestoreManager:
 
         with zipfile.ZipFile(zip_path, "r") as zf:
             for bp in info.get("backup_paths", []):
-                source_path = Path(bp["source"])
+                source_path = resolve_path(bp["source"])
                 is_dir = bp.get("is_dir", False)
                 zip_prefix = bp.get("zip_path", "")
 

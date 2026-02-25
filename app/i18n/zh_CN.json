@@ -28,7 +28,11 @@
         "last_modified": "最后修改",
         "install_path": "安装路径",
         "data_path": "数据路径",
-        "saves_count": "存档数"
+        "saves_count": "存档数",
+        "files": "个文件",
+        "file_name": "文件名",
+        "show_files": "展开文件列表",
+        "hide_files": "收起文件列表"
     },
     "backup": {
         "title": "存档备份",

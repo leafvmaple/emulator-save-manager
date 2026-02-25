@@ -157,7 +157,11 @@ class _EmulatorCard(CardWidget):
 
 
 class _GameSaveCard(CardWidget):
-    """Card showing one game with all its saves and metadata."""
+    """Card showing one game with all its saves and metadata.
+
+    Clicking the expand chevron reveals a table of individual save files
+    with file name, type, size and last-modified time.
+    """
 
     ICON_WIDTH = 42
     ICON_MAX_HEIGHT = 58
@@ -173,7 +177,7 @@ class _GameSaveCard(CardWidget):
         self.saves = saves
         self.game_id = game_id
         self.emulator = saves[0].emulator
-        self.setFixedHeight(94)
+        self._expanded = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         ref = saves[0]
@@ -183,8 +187,15 @@ class _GameSaveCard(CardWidget):
                 display_name = s.game_name
                 break
 
-        root = QHBoxLayout(self)
-        root.setContentsMargins(16, 10, 16, 10)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(20, 12, 20, 12)
+        outer.setSpacing(0)
+
+        # -- Top summary row (always visible) --
+        self._summary = QWidget(self)
+        self._summary.setFixedHeight(94)
+        root = QHBoxLayout(self._summary)
+        root.setContentsMargins(0, 4, 0, 4)
         root.setSpacing(14)
 
         # Icon — cover art > plugin emulator icon > generic
@@ -252,7 +263,7 @@ class _GameSaveCard(CardWidget):
         row3.addWidget(CaptionLabel(_format_size(total_size), self))
 
         file_count = sum(len(s.save_files) for s in saves)
-        row3.addWidget(CaptionLabel(f"{file_count} files", self))
+        row3.addWidget(CaptionLabel(f"{file_count} {t('scan.files')}", self))
 
         last_mod = max(
             (s.last_modified for s in saves if s.last_modified),
@@ -265,12 +276,117 @@ class _GameSaveCard(CardWidget):
 
         root.addLayout(info, 1)
 
+        # Expand / collapse chevron
+        self._expand_btn = TransparentToolButton(FIF.CHEVRON_RIGHT, self)
+        self._expand_btn.setFixedSize(28, 28)
+        self._expand_btn.setToolTip(t("scan.show_files"))
+        self._expand_btn.clicked.connect(self._toggle_expand)
+        root.addWidget(self._expand_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+
         # Open folder button
         open_btn = TransparentToolButton(FIF.FOLDER, self)
         open_btn.setFixedSize(32, 32)
         open_btn.setToolTip(t("common.open_folder"))
         open_btn.clicked.connect(lambda: self._open_folder())
         root.addWidget(open_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        outer.addWidget(self._summary)
+
+        # -- File detail area (hidden by default) --
+        self._detail_widget = QWidget(self)
+        self._detail_widget.setVisible(False)
+        detail_layout = QVBoxLayout(self._detail_widget)
+        detail_layout.setContentsMargins(0, 0, 0, 0)
+        detail_layout.setSpacing(2)
+
+        # Separator line
+        sep = QLabel(self)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet("background: #e0e0e0;")
+        detail_layout.addWidget(sep)
+
+        # Collect all save files
+        all_files = []
+        for s in saves:
+            for sf in s.save_files:
+                all_files.append(sf)
+
+        # Header row
+        hdr = QHBoxLayout()
+        hdr.setSpacing(0)
+        hdr_name = CaptionLabel(t("scan.file_name"), self)
+        hdr_name.setStyleSheet("color:#888; font-weight:600;")
+        hdr_name.setFixedWidth(260)
+        hdr.addWidget(hdr_name)
+        hdr_type = CaptionLabel(t("scan.save_type"), self)
+        hdr_type.setStyleSheet("color:#888; font-weight:600;")
+        hdr_type.setFixedWidth(90)
+        hdr.addWidget(hdr_type)
+        hdr_size = CaptionLabel(t("scan.size"), self)
+        hdr_size.setStyleSheet("color:#888; font-weight:600;")
+        hdr_size.setFixedWidth(80)
+        hdr.addWidget(hdr_size)
+        hdr_mod = CaptionLabel(t("scan.last_modified"), self)
+        hdr_mod.setStyleSheet("color:#888; font-weight:600;")
+        hdr.addWidget(hdr_mod)
+        hdr.addStretch()
+        detail_layout.addLayout(hdr)
+
+        # File rows
+        for sf in all_files:
+            frow = QHBoxLayout()
+            frow.setSpacing(0)
+
+            # File / folder name (with path tooltip)
+            file_label = CaptionLabel(sf.path.name, self)
+            file_label.setFixedWidth(260)
+            file_label.setToolTip(str(sf.path))
+            file_label.setStyleSheet("color:#000000; font-weight:600;")
+            frow.addWidget(file_label)
+
+            # Type
+            type_label = CaptionLabel(t(f"save_type.{sf.save_type.value}"), self)
+            type_label.setFixedWidth(90)
+            color = _SAVE_TYPE_COLORS.get(sf.save_type, "#888")
+            type_label.setStyleSheet(f"color:{color};")
+            frow.addWidget(type_label)
+
+            # Size
+            size_label = CaptionLabel(_format_size(sf.size), self)
+            size_label.setFixedWidth(80)
+            frow.addWidget(size_label)
+
+            # Modified time
+            mod_label = CaptionLabel(
+                sf.modified.strftime("%Y/%m/%d %H:%M") if sf.modified else "-",
+                self,
+            )
+            frow.addWidget(mod_label)
+            frow.addStretch()
+
+            # Open folder button for this file
+            file_folder_btn = TransparentToolButton(FIF.FOLDER, self)
+            file_folder_btn.setFixedSize(24, 24)
+            file_folder_btn.setToolTip(t("common.open_folder"))
+            _path = sf.path
+            file_folder_btn.clicked.connect(lambda checked=False, p=_path: self._open_file_folder(p))
+            frow.addWidget(file_folder_btn)
+
+            detail_layout.addLayout(frow)
+
+        outer.addWidget(self._detail_widget)
+
+    # -- Expand / collapse --
+
+    def _toggle_expand(self) -> None:
+        self._expanded = not self._expanded
+        self._detail_widget.setVisible(self._expanded)
+        if self._expanded:
+            self._expand_btn.setIcon(FIF.CHEVRON_DOWN_MED)
+            self._expand_btn.setToolTip(t("scan.hide_files"))
+        else:
+            self._expand_btn.setIcon(FIF.CHEVRON_RIGHT)
+            self._expand_btn.setToolTip(t("scan.show_files"))
 
     def _set_fallback_icon(self, emulator_name: str) -> None:
         """Try plugin icon.png, otherwise show generic icon."""
@@ -291,6 +407,19 @@ class _GameSaveCard(CardWidget):
             return
         target = self.saves[0].save_files[0].path
         folder = target.parent if target.is_file() else target
+        if not folder.exists():
+            return
+        if sys.platform == "win32":
+            os.startfile(str(folder))  # noqa: S606
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(folder)])  # noqa: S603
+        else:
+            subprocess.Popen(["xdg-open", str(folder)])  # noqa: S603
+
+    @staticmethod
+    def _open_file_folder(path: Path) -> None:
+        """Open the folder containing a specific save file."""
+        folder = path.parent if path.is_file() else path
         if not folder.exists():
             return
         if sys.platform == "win32":
@@ -415,7 +544,7 @@ class ScanPage(QWidget):
         self._scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         self._scroll_inner = QWidget()
         self._card_layout = QVBoxLayout(self._scroll_inner)
-        self._card_layout.setContentsMargins(0, 0, 8, 0)
+        self._card_layout.setContentsMargins(8, 8, 8, 8)
         self._card_layout.setSpacing(6)
         self._card_layout.addStretch()
         self._scroll.setWidget(self._scroll_inner)

@@ -13,6 +13,7 @@ from loguru import logger
 
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
+from app.core.path_resolver import get_documents_dir
 from app.plugins.base import EmulatorPlugin
 
 # PS2 memory card constants
@@ -373,7 +374,7 @@ class PCSX2Plugin(EmulatorPlugin):
                     candidates.append(p)
 
         # 1. Documents/PCSX2 (default data dir)
-        docs_path = Path.home() / "Documents" / "PCSX2"
+        docs_path = get_documents_dir() / "PCSX2"
         if docs_path.exists():
             candidates.append(docs_path)
 

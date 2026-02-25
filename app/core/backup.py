@@ -22,6 +22,7 @@ from loguru import logger
 from app.config import Config
 from app.models.backup_record import BackupInfo, BackupRecord
 from app.models.game_save import GameSave
+from app.core.path_resolver import to_portable_path
 
 
 class BackupManager:
@@ -94,7 +95,7 @@ class BackupManager:
                                     arc_name = f"{zip_prefix}/{rel.as_posix()}"
                                     zf.write(child, arc_name)
                             backup_paths.append({
-                                "source": str(sf.path),
+                                "source": to_portable_path(sf.path),
                                 "type": type_prefix,
                                 "zip_path": f"{zip_prefix}/",
                                 "is_dir": True,
@@ -103,7 +104,7 @@ class BackupManager:
                             arc_name = f"{type_prefix}/{sf.path.name}"
                             zf.write(sf.path, arc_name)
                             backup_paths.append({
-                                "source": str(sf.path),
+                                "source": to_portable_path(sf.path),
                                 "type": type_prefix,
                                 "zip_path": arc_name,
                                 "is_dir": False,

@@ -12,6 +12,7 @@ from loguru import logger
 
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
+from app.core.path_resolver import get_documents_dir
 from app.plugins.base import EmulatorPlugin
 
 # Mesen2 save state header
@@ -137,7 +138,7 @@ class MesenPlugin(EmulatorPlugin):
                     candidates.append(p)
 
         # 1. Default: Documents/Mesen2
-        docs_path = Path.home() / "Documents" / "Mesen2"
+        docs_path = get_documents_dir() / "Mesen2"
         if docs_path.exists():
             candidates.append(docs_path)
 

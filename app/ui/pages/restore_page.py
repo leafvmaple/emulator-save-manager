@@ -8,6 +8,9 @@ and a one-click restore button.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, QThread
@@ -27,6 +30,7 @@ from loguru import logger
 
 from app.i18n import t
 from app.models.backup_record import BackupRecord
+from app.models.game_save import SaveType
 from app.core.game_icon import GameIconProvider, get_plugin_icon
 
 
@@ -48,17 +52,41 @@ def _zip_size(record: BackupRecord) -> int:
 
 
 def _backup_types(record: BackupRecord) -> list[str]:
-    """Read save types from the sidecar json metadata."""
+    """Read raw save type keys from the sidecar json metadata."""
     meta = record.backup_path.with_suffix(".json")
     if not meta.exists():
         return []
     try:
         with open(meta, "r", encoding="utf-8") as f:
             data = json.load(f)
-        types = sorted({bp.get("type", "") for bp in data.get("backup_paths", [])})
-        return [t(f"save_type.{tp}") for tp in types if tp]
+        return sorted({bp.get("type", "") for bp in data.get("backup_paths", [])} - {""})
     except Exception:
         return []
+
+
+_SAVE_TYPE_COLORS: dict[str, str] = {
+    "savestate": "#0078d4",
+    "memcard": "#107c10",
+    "folder": "#107c10",
+    "battery": "#ff8c00",
+    "file": "#5c2d91",
+}
+
+
+class _TypeBadge(QLabel):
+    """Coloured pill badge for a save type."""
+
+    def __init__(self, text: str, color: str, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self.setFixedHeight(18)
+        setFont(self, 10)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pad = max(24, self.fontMetrics().horizontalAdvance(text) + 14)
+        self.setFixedWidth(pad)
+        self.setStyleSheet(
+            f"background:{color}; color:white; border-radius:9px; "
+            f"padding:0 5px; font-weight:500;"
+        )
 
 
 # -----------------------------------------------------------------------
@@ -76,7 +104,7 @@ class _VersionCard(SimpleCardWidget):
         self.setFixedHeight(56)
 
         root = QHBoxLayout(self)
-        root.setContentsMargins(16, 8, 12, 8)
+        root.setContentsMargins(16, 8, 16, 8)
         root.setSpacing(12)
 
         # Version badge
@@ -128,6 +156,7 @@ class _VersionCard(SimpleCardWidget):
         root.addWidget(restore_btn)
 
 
+
 # -----------------------------------------------------------------------
 # Game card
 # -----------------------------------------------------------------------
@@ -154,14 +183,14 @@ class _GameBackupCard(CardWidget):
         self._version_cards: list[_VersionCard] = []
 
         main = QVBoxLayout(self)
-        main.setContentsMargins(0, 0, 0, 0)
+        main.setContentsMargins(20, 12, 20, 12)
         main.setSpacing(0)
 
         # --- Header ---
         header = QWidget(self)
         header.setCursor(Qt.CursorShape.PointingHandCursor)
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(16, 12, 16, 12)
+        header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(12)
 
         # Icon — cover art or fallback
@@ -213,13 +242,9 @@ class _GameBackupCard(CardWidget):
 
         # Type badges from latest backup
         types = _backup_types(records[0]) if records else []
-        for tp_text in types:
-            badge = CaptionLabel(tp_text, header)
-            badge.setStyleSheet(
-                "background:#0078d4; color:white; border-radius:3px; "
-                "padding:1px 6px; font-size:11px;"
-            )
-            meta_row.addWidget(badge)
+        for tp_key in types:
+            color = _SAVE_TYPE_COLORS.get(tp_key, "#888")
+            meta_row.addWidget(_TypeBadge(t(f"save_type.{tp_key}"), color, header))
 
         meta_row.addStretch()
         meta_row.addWidget(CaptionLabel(
@@ -235,13 +260,21 @@ class _GameBackupCard(CardWidget):
         self._chevron.setEnabled(False)
         header_layout.addWidget(self._chevron)
 
+        # Open backup folder
+        open_btn = TransparentToolButton(FIF.FOLDER, header)
+        open_btn.setFixedSize(32, 32)
+        open_btn.setToolTip(t("common.open_folder"))
+        self._backup_folder = records[0].backup_path.parent if records else None
+        open_btn.clicked.connect(self._open_folder)
+        header_layout.addWidget(open_btn)
+
         main.addWidget(header)
 
         # --- Expandable body ---
         self._body = QWidget(self)
         self._body.hide()
         body_layout = QVBoxLayout(self._body)
-        body_layout.setContentsMargins(20, 4, 20, 12)
+        body_layout.setContentsMargins(0, 4, 0, 4)
         body_layout.setSpacing(6)
 
         for r in records:
@@ -259,10 +292,19 @@ class _GameBackupCard(CardWidget):
         self._expanded = not self._expanded
         self._body.setVisible(self._expanded)
         self._chevron.setIcon(
-            FIF.CHEVRON_DOWN if self._expanded else FIF.CHEVRON_RIGHT
+            FIF.CHEVRON_DOWN_MED if self._expanded else FIF.CHEVRON_RIGHT
         )
-        # Adjust height dynamically
-        self.adjustSize()
+
+    def _open_folder(self) -> None:
+        """Open the folder containing this game's backups."""
+        if not self._backup_folder or not self._backup_folder.exists():
+            return
+        if sys.platform == "win32":
+            os.startfile(str(self._backup_folder))  # noqa: S606
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(self._backup_folder)])  # noqa: S603
+        else:
+            subprocess.Popen(["xdg-open", str(self._backup_folder)])  # noqa: S603
 
 
 # -----------------------------------------------------------------------
@@ -334,7 +376,7 @@ class RestorePage(QWidget):
         self._scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         self._scroll_inner = QWidget()
         self._card_layout = QVBoxLayout(self._scroll_inner)
-        self._card_layout.setContentsMargins(0, 0, 8, 0)
+        self._card_layout.setContentsMargins(8, 8, 8, 8)
         self._card_layout.setSpacing(10)
         self._card_layout.addStretch()
         self._scroll.setWidget(self._scroll_inner)
