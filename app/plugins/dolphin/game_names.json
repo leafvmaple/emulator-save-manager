@@ -1,0 +1,402 @@
+{
+    "GALE01": {
+        "en_US": "Super Smash Bros. Melee",
+        "zh_CN": "任天堂明星大乱斗DX",
+        "ja_JP": "大乱闘スマッシュブラザーズDX"
+    },
+    "GALJ01": {
+        "en_US": "Super Smash Bros. Melee",
+        "zh_CN": "任天堂明星大乱斗DX",
+        "ja_JP": "大乱闘スマッシュブラザーズDX"
+    },
+    "GALP01": {
+        "en_US": "Super Smash Bros. Melee",
+        "zh_CN": "任天堂明星大乱斗DX",
+        "ja_JP": "大乱闘スマッシュブラザーズDX"
+    },
+    "GMS01": {
+        "en_US": "Super Mario Sunshine",
+        "zh_CN": "超级马力欧阳光",
+        "ja_JP": "スーパーマリオサンシャイン"
+    },
+    "GMSE01": {
+        "en_US": "Super Mario Sunshine",
+        "zh_CN": "超级马力欧阳光",
+        "ja_JP": "スーパーマリオサンシャイン"
+    },
+    "GMSJ01": {
+        "en_US": "Super Mario Sunshine",
+        "zh_CN": "超级马力欧阳光",
+        "ja_JP": "スーパーマリオサンシャイン"
+    },
+    "GMSP01": {
+        "en_US": "Super Mario Sunshine",
+        "zh_CN": "超级马力欧阳光",
+        "ja_JP": "スーパーマリオサンシャイン"
+    },
+    "GZ2E01": {
+        "en_US": "The Legend of Zelda: Twilight Princess",
+        "zh_CN": "塞尔达传说 黄昏公主",
+        "ja_JP": "ゼルダの伝説 トワイライトプリンセス"
+    },
+    "GZ2J01": {
+        "en_US": "The Legend of Zelda: Twilight Princess",
+        "zh_CN": "塞尔达传说 黄昏公主",
+        "ja_JP": "ゼルダの伝説 トワイライトプリンセス"
+    },
+    "GZ2P01": {
+        "en_US": "The Legend of Zelda: Twilight Princess",
+        "zh_CN": "塞尔达传说 黄昏公主",
+        "ja_JP": "ゼルダの伝説 トワイライトプリンセス"
+    },
+    "GZLE01": {
+        "en_US": "The Legend of Zelda: The Wind Waker",
+        "zh_CN": "塞尔达传说 风之杖",
+        "ja_JP": "ゼルダの伝説 風のタクト"
+    },
+    "GZLJ01": {
+        "en_US": "The Legend of Zelda: The Wind Waker",
+        "zh_CN": "塞尔达传说 风之杖",
+        "ja_JP": "ゼルダの伝説 風のタクト"
+    },
+    "GZLP01": {
+        "en_US": "The Legend of Zelda: The Wind Waker",
+        "zh_CN": "塞尔达传说 风之杖",
+        "ja_JP": "ゼルダの伝説 風のタクト"
+    },
+    "GM4E01": {
+        "en_US": "Metroid Prime",
+        "zh_CN": "银河战士Prime",
+        "ja_JP": "メトロイドプライム"
+    },
+    "GM4J01": {
+        "en_US": "Metroid Prime",
+        "zh_CN": "银河战士Prime",
+        "ja_JP": "メトロイドプライム"
+    },
+    "GM4P01": {
+        "en_US": "Metroid Prime",
+        "zh_CN": "银河战士Prime",
+        "ja_JP": "メトロイドプライム"
+    },
+    "G2ME01": {
+        "en_US": "Metroid Prime 2: Echoes",
+        "zh_CN": "银河战士Prime 2 回声",
+        "ja_JP": "メトロイドプライム2 ダークエコーズ"
+    },
+    "GMKE01": {
+        "en_US": "Mario Kart: Double Dash!!",
+        "zh_CN": "马力欧卡丁车 双重冲刺!!",
+        "ja_JP": "マリオカート ダブルダッシュ!!"
+    },
+    "GMKJ01": {
+        "en_US": "Mario Kart: Double Dash!!",
+        "zh_CN": "马力欧卡丁车 双重冲刺!!",
+        "ja_JP": "マリオカート ダブルダッシュ!!"
+    },
+    "GMKP01": {
+        "en_US": "Mario Kart: Double Dash!!",
+        "zh_CN": "马力欧卡丁车 双重冲刺!!",
+        "ja_JP": "マリオカート ダブルダッシュ!!"
+    },
+    "GLME01": {
+        "en_US": "Luigi's Mansion",
+        "zh_CN": "路易吉洋馆",
+        "ja_JP": "ルイージマンション"
+    },
+    "GP5E01": {
+        "en_US": "Paper Mario: The Thousand-Year Door",
+        "zh_CN": "纸片马力欧 千年之门",
+        "ja_JP": "ペーパーマリオRPG"
+    },
+    "GP5J01": {
+        "en_US": "Paper Mario: The Thousand-Year Door",
+        "zh_CN": "纸片马力欧 千年之门",
+        "ja_JP": "ペーパーマリオRPG"
+    },
+    "GFTE01": {
+        "en_US": "Fire Emblem: Path of Radiance",
+        "zh_CN": "火焰纹章 苍炎之轨迹",
+        "ja_JP": "ファイアーエムブレム 蒼炎の軌跡"
+    },
+    "GFEJ01": {
+        "en_US": "Fire Emblem: Path of Radiance",
+        "zh_CN": "火焰纹章 苍炎之轨迹",
+        "ja_JP": "ファイアーエムブレム 蒼炎の軌跡"
+    },
+    "GPVE01": {
+        "en_US": "Pikmin",
+        "zh_CN": "皮克敏",
+        "ja_JP": "ピクミン"
+    },
+    "GPIE01": {
+        "en_US": "Pikmin 2",
+        "zh_CN": "皮克敏2",
+        "ja_JP": "ピクミン2"
+    },
+    "GC6E01": {
+        "en_US": "Pokémon Colosseum",
+        "zh_CN": "宝可梦竞技场",
+        "ja_JP": "ポケモンコロシアム"
+    },
+    "GXXE01": {
+        "en_US": "Pokémon XD: Gale of Darkness",
+        "zh_CN": "宝可梦XD 暗之旋风",
+        "ja_JP": "ポケモンXD 闇の旋風ダーク・ルギア"
+    },
+    "GXXJ01": {
+        "en_US": "Pokémon XD: Gale of Darkness",
+        "zh_CN": "宝可梦XD 暗之旋风",
+        "ja_JP": "ポケモンXD 闇の旋風ダーク・ルギア"
+    },
+    "GXXP01": {
+        "en_US": "Pokémon XD: Gale of Darkness",
+        "zh_CN": "宝可梦XD 暗之旋风",
+        "ja_JP": "ポケモンXD 闇の旋風ダーク・ルギア"
+    },
+    "GSNE8P": {
+        "en_US": "Sonic Adventure 2: Battle",
+        "zh_CN": "索尼克大冒险2 对战",
+        "ja_JP": "ソニックアドベンチャー2 バトル"
+    },
+    "GXSE8P": {
+        "en_US": "Sonic Heroes",
+        "zh_CN": "索尼克英雄",
+        "ja_JP": "ソニック ヒーローズ"
+    },
+    "GS3E52": {
+        "en_US": "Resident Evil 4",
+        "zh_CN": "生化危机4",
+        "ja_JP": "バイオハザード4"
+    },
+    "GTSE8P": {
+        "en_US": "Tales of Symphonia",
+        "zh_CN": "仙乐传说",
+        "ja_JP": "テイルズ オブ シンフォニア"
+    },
+    "GKYE01": {
+        "en_US": "Kirby Air Ride",
+        "zh_CN": "星之卡比 飞天竞速",
+        "ja_JP": "カービィのエアライド"
+    },
+    "RMCE01": {
+        "en_US": "Mario Kart Wii",
+        "zh_CN": "马力欧卡丁车Wii",
+        "ja_JP": "マリオカートWii"
+    },
+    "RMCJ01": {
+        "en_US": "Mario Kart Wii",
+        "zh_CN": "马力欧卡丁车Wii",
+        "ja_JP": "マリオカートWii"
+    },
+    "RMCP01": {
+        "en_US": "Mario Kart Wii",
+        "zh_CN": "马力欧卡丁车Wii",
+        "ja_JP": "マリオカートWii"
+    },
+    "RMGE01": {
+        "en_US": "Super Mario Galaxy",
+        "zh_CN": "超级马力欧银河",
+        "ja_JP": "スーパーマリオギャラクシー"
+    },
+    "RMGJ01": {
+        "en_US": "Super Mario Galaxy",
+        "zh_CN": "超级马力欧银河",
+        "ja_JP": "スーパーマリオギャラクシー"
+    },
+    "RMGP01": {
+        "en_US": "Super Mario Galaxy",
+        "zh_CN": "超级马力欧银河",
+        "ja_JP": "スーパーマリオギャラクシー"
+    },
+    "SB4E01": {
+        "en_US": "Super Mario Galaxy 2",
+        "zh_CN": "超级马力欧银河2",
+        "ja_JP": "スーパーマリオギャラクシー2"
+    },
+    "SB4J01": {
+        "en_US": "Super Mario Galaxy 2",
+        "zh_CN": "超级马力欧银河2",
+        "ja_JP": "スーパーマリオギャラクシー2"
+    },
+    "SB4P01": {
+        "en_US": "Super Mario Galaxy 2",
+        "zh_CN": "超级马力欧银河2",
+        "ja_JP": "スーパーマリオギャラクシー2"
+    },
+    "RSBE01": {
+        "en_US": "Super Smash Bros. Brawl",
+        "zh_CN": "任天堂明星大乱斗X",
+        "ja_JP": "大乱闘スマッシュブラザーズX"
+    },
+    "RSBJ01": {
+        "en_US": "Super Smash Bros. Brawl",
+        "zh_CN": "任天堂明星大乱斗X",
+        "ja_JP": "大乱闘スマッシュブラザーズX"
+    },
+    "RSBP01": {
+        "en_US": "Super Smash Bros. Brawl",
+        "zh_CN": "任天堂明星大乱斗X",
+        "ja_JP": "大乱闘スマッシュブラザーズX"
+    },
+    "RZDE01": {
+        "en_US": "The Legend of Zelda: Twilight Princess",
+        "zh_CN": "塞尔达传说 黄昏公主",
+        "ja_JP": "ゼルダの伝説 トワイライトプリンセス"
+    },
+    "RZDJ01": {
+        "en_US": "The Legend of Zelda: Twilight Princess",
+        "zh_CN": "塞尔达传说 黄昏公主",
+        "ja_JP": "ゼルダの伝説 トワイライトプリンセス"
+    },
+    "RZDP01": {
+        "en_US": "The Legend of Zelda: Twilight Princess",
+        "zh_CN": "塞尔达传说 黄昏公主",
+        "ja_JP": "ゼルダの伝説 トワイライトプリンセス"
+    },
+    "SOUE01": {
+        "en_US": "The Legend of Zelda: Skyward Sword",
+        "zh_CN": "塞尔达传说 天空之剑",
+        "ja_JP": "ゼルダの伝説 スカイウォードソード"
+    },
+    "SOUJ01": {
+        "en_US": "The Legend of Zelda: Skyward Sword",
+        "zh_CN": "塞尔达传说 天空之剑",
+        "ja_JP": "ゼルダの伝説 スカイウォードソード"
+    },
+    "SOUP01": {
+        "en_US": "The Legend of Zelda: Skyward Sword",
+        "zh_CN": "塞尔达传说 天空之剑",
+        "ja_JP": "ゼルダの伝説 スカイウォードソード"
+    },
+    "SMNE01": {
+        "en_US": "New Super Mario Bros. Wii",
+        "zh_CN": "新超级马力欧兄弟Wii",
+        "ja_JP": "New スーパーマリオブラザーズ Wii"
+    },
+    "SMNJ01": {
+        "en_US": "New Super Mario Bros. Wii",
+        "zh_CN": "新超级马力欧兄弟Wii",
+        "ja_JP": "New スーパーマリオブラザーズ Wii"
+    },
+    "SMNP01": {
+        "en_US": "New Super Mario Bros. Wii",
+        "zh_CN": "新超级马力欧兄弟Wii",
+        "ja_JP": "New スーパーマリオブラザーズ Wii"
+    },
+    "R3ME01": {
+        "en_US": "Metroid Prime 3: Corruption",
+        "zh_CN": "银河战士Prime 3 堕落",
+        "ja_JP": "メトロイドプライム3 コラプション"
+    },
+    "RMDE01": {
+        "en_US": "Metroid: Other M",
+        "zh_CN": "银河战士 另一个M",
+        "ja_JP": "メトロイド アザーエム"
+    },
+    "SFIE01": {
+        "en_US": "Donkey Kong Country Returns",
+        "zh_CN": "大金刚回归",
+        "ja_JP": "ドンキーコング リターンズ"
+    },
+    "RFTE01": {
+        "en_US": "Fire Emblem: Radiant Dawn",
+        "zh_CN": "火焰纹章 晓之女神",
+        "ja_JP": "ファイアーエムブレム 暁の女神"
+    },
+    "RFEJ01": {
+        "en_US": "Fire Emblem: Radiant Dawn",
+        "zh_CN": "火焰纹章 晓之女神",
+        "ja_JP": "ファイアーエムブレム 暁の女神"
+    },
+    "R8PE01": {
+        "en_US": "Super Paper Mario",
+        "zh_CN": "超级纸片马力欧",
+        "ja_JP": "スーパーペーパーマリオ"
+    },
+    "SXDE52": {
+        "en_US": "Xenoblade Chronicles",
+        "zh_CN": "异度神剑",
+        "ja_JP": "ゼノブレイド"
+    },
+    "SX4J01": {
+        "en_US": "Xenoblade Chronicles",
+        "zh_CN": "异度神剑",
+        "ja_JP": "ゼノブレイド"
+    },
+    "POUE01": {
+        "en_US": "Pokémon Battle Revolution",
+        "zh_CN": "宝可梦 战斗革命",
+        "ja_JP": "ポケモン バトルレボリューション"
+    },
+    "RMLE01": {
+        "en_US": "Animal Crossing: City Folk",
+        "zh_CN": "动物之森 城市人",
+        "ja_JP": "街へいこうよ どうぶつの森"
+    },
+    "SUPE01": {
+        "en_US": "Mario Party 9",
+        "zh_CN": "马力欧派对9",
+        "ja_JP": "マリオパーティ9"
+    },
+    "RKYE01": {
+        "en_US": "Kirby's Epic Yarn",
+        "zh_CN": "星之卡比 毛线卡比",
+        "ja_JP": "毛糸のカービィ"
+    },
+    "RVLE01": {
+        "en_US": "Wii Sports Resort",
+        "zh_CN": "Wii 运动 度假胜地",
+        "ja_JP": "Wiiスポーツ リゾート"
+    },
+    "RSPE01": {
+        "en_US": "Wii Sports",
+        "zh_CN": "Wii 运动",
+        "ja_JP": "Wiiスポーツ"
+    },
+    "G4SJ01": {
+        "en_US": "Mario Superstar Baseball",
+        "zh_CN": "马力欧超级棒球",
+        "ja_JP": "スーパーマリオスタジアム ミラクルベースボール"
+    },
+    "GLMJ01": {
+        "en_US": "Luigi's Mansion",
+        "zh_CN": "路易吉洋馆",
+        "ja_JP": "ルイージマンション"
+    },
+    "GLME01": {
+        "en_US": "Luigi's Mansion",
+        "zh_CN": "路易吉洋馆",
+        "ja_JP": "ルイージマンション"
+    },
+    "GSAE01": {
+        "en_US": "Sonic Adventure DX: Director's Cut",
+        "zh_CN": "索尼克大冒险DX 导演剪辑版",
+        "ja_JP": "ソニックアドベンチャーDX"
+    },
+    "GSAJ01": {
+        "en_US": "Sonic Adventure DX: Director's Cut",
+        "zh_CN": "索尼克大冒险DX 导演剪辑版",
+        "ja_JP": "ソニックアドベンチャーDX"
+    },
+    "RFEJ01": {
+        "en_US": "Fire Emblem: Radiant Dawn",
+        "zh_CN": "火焰纹章 晓之女神",
+        "ja_JP": "ファイアーエムブレム 暁の女神"
+    },
+    "RWLJ01": {
+        "en_US": "Wii Love: We Wish You a Merry Christmas",
+        "zh_CN": "Wii乐园 圣诞快乐",
+        "ja_JP": "ウィーラブ メリクリ"
+    },
+    "SUKJ01": {
+        "en_US": "Kirby's Return to Dream Land",
+        "zh_CN": "星之卡比Wii",
+        "ja_JP": "星のカービィ Wii"
+    },
+    "SUKE01": {
+        "en_US": "Kirby's Return to Dream Land",
+        "zh_CN": "星之卡比Wii",
+        "ja_JP": "星のカービィ Wii"
+    }
+}

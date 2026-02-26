@@ -20,7 +20,7 @@ class EmulatorInfo:
     version: str = ""
     """Detected emulator version string, if available."""
 
-    supported_platforms: list[str] = field(default_factory=list)
+    supported_platforms: list[str] = field(default_factory=list[str])
     """Game platforms this emulator supports (e.g. ['PS2'], ['NES','SNES','GB'])."""
 
     is_portable: bool = False

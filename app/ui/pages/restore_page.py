@@ -257,7 +257,8 @@ class _GameBackupCard(CardWidget):
         # Expand indicator
         self._chevron = TransparentToolButton(FIF.CHEVRON_RIGHT, header)
         self._chevron.setFixedSize(28, 28)
-        self._chevron.setEnabled(False)
+        self._chevron.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._chevron.clicked.connect(self._toggle)
         header_layout.addWidget(self._chevron)
 
         # Open backup folder

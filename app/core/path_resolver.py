@@ -164,12 +164,30 @@ def _placeholder_map() -> list[tuple[str, Path]]:
 # Public API
 # ---------------------------------------------------------------------------
 
-def resolve_path(portable: str) -> Path:
+def resolve_path(portable: str, emu_data_path: Path | None = None) -> Path:
     """Expand placeholders in *portable* and return an absolute ``Path``.
 
     If the string contains no placeholder it is returned as-is (assumed
     to already be absolute).
+
+    Parameters
+    ----------
+    portable : str
+        Portable path string, possibly containing placeholders.
+    emu_data_path : Path, optional
+        The emulator's data directory for resolving ``${EMU_DATA}``.
     """
+    # Handle ${EMU_DATA} placeholder
+    if portable.startswith("${EMU_DATA}"):
+        if emu_data_path is None:
+            logger.warning(
+                "Cannot resolve ${{EMU_DATA}} without emulator data_path: {}",
+                portable,
+            )
+            return Path(portable)
+        rest = portable[len("${EMU_DATA}"):].lstrip("/").lstrip("\\")
+        return emu_data_path / rest if rest else emu_data_path
+
     for placeholder, real in _placeholder_map():
         if portable.startswith(placeholder):
             rest = portable[len(placeholder):]
@@ -179,13 +197,32 @@ def resolve_path(portable: str) -> Path:
     return Path(portable)
 
 
-def to_portable_path(absolute: str | Path) -> str:
+def to_portable_path(absolute: str | Path, emu_data_path: Path | None = None) -> str:
     """Replace the OS-specific prefix of *absolute* with a placeholder.
 
     Returns a forward-slash string like ``${DOCUMENTS}/PCSX2/memcards/…``
     that is safe to persist in JSON and resolves correctly on any machine.
+
+    Parameters
+    ----------
+    absolute : str | Path
+        Absolute path to convert.
+    emu_data_path : Path, optional
+        The emulator's data directory.  If the file lives under this
+        directory, the path is stored as ``${EMU_DATA}/relative/…`` so
+        it remains valid when the emulator is installed elsewhere on
+        another machine.
     """
     abs_str = str(Path(absolute)).replace("\\", "/")
+
+    # 1. Try emulator data directory first (most specific match)
+    if emu_data_path is not None:
+        emu_str = str(emu_data_path).replace("\\", "/")
+        if abs_str.lower().startswith(emu_str.lower()):
+            rest = abs_str[len(emu_str):].lstrip("/")
+            return f"${{EMU_DATA}}/{rest}" if rest else "${EMU_DATA}"
+
+    # 2. Try well-known OS directory placeholders
     for placeholder, real in _placeholder_map():
         real_str = str(real).replace("\\", "/")
         # Case-insensitive match on Windows

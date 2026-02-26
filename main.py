@@ -40,6 +40,7 @@ def main() -> None:
     scanner = Scanner(pm, config)
     backup_mgr = BackupManager(config)
     restore_mgr = RestoreManager()
+    restore_mgr.set_scanner(scanner)
     sync_mgr = SyncManager(config, backup_mgr)
     icon_provider = GameIconProvider(config.data_dir / "icons")
 

@@ -37,8 +37,49 @@ class FileChange:
     """True if the destination file is newer than the backup."""
 
 
+def _resolve_emu_data_path(
+    info: dict,
+    detected_emulators: list | None = None,
+) -> Path | None:
+    """Resolve the emulator data_path for ``${EMU_DATA}`` expansion.
+
+    Priority:
+    1. Current detected emulator installation with matching name
+    2. Stored ``emulator_data_path`` in metadata (resolve its placeholders)
+    3. ``None`` — caller will log a warning
+    """
+    emulator_name = info.get("emulator", "")
+
+    # 1. Try current detected installations
+    if detected_emulators:
+        for emu in detected_emulators:
+            if emu.name == emulator_name:
+                return emu.data_path
+
+    # 2. Fallback: stored path from backup time
+    stored = info.get("emulator_data_path", "")
+    if stored:
+        return resolve_path(stored)
+
+    return None
+
+
 class RestoreManager:
     """Handles restoring game saves from ZIP backup records."""
+
+    def __init__(self) -> None:
+        self._scanner = None
+
+    def set_scanner(self, scanner) -> None:  # noqa: ANN001
+        """Provide a Scanner so ``${EMU_DATA}`` can resolve via current installations."""
+        self._scanner = scanner
+
+    @property
+    def _detected_emulators(self) -> list | None:
+        if self._scanner is not None:
+            emus = self._scanner.detected_emulators
+            return emus if emus else None
+        return None
 
     def preview_restore(self, record: BackupRecord) -> list[FileChange]:
         """Preview what files will be changed by restoring a backup.
@@ -56,10 +97,12 @@ class RestoreManager:
         with open(meta_path, "r", encoding="utf-8") as f:
             info = json.load(f)
 
+        emu_data_path = _resolve_emu_data_path(info, self._detected_emulators)
+
         with zipfile.ZipFile(zip_path, "r") as zf:
             names_set = {zi.filename for zi in zf.infolist()}
             for bp in info.get("backup_paths", []):
-                source_path = resolve_path(bp["source"])
+                source_path = resolve_path(bp["source"], emu_data_path)
                 is_dir = bp.get("is_dir", False)
                 zip_prefix = bp.get("zip_path", "")
 
@@ -105,9 +148,11 @@ class RestoreManager:
         with open(meta_path, "r", encoding="utf-8") as f:
             info = json.load(f)
 
+        emu_data_path = _resolve_emu_data_path(info, self._detected_emulators)
+
         with zipfile.ZipFile(zip_path, "r") as zf:
             for bp in info.get("backup_paths", []):
-                source_path = resolve_path(bp["source"])
+                source_path = resolve_path(bp["source"], emu_data_path)
                 is_dir = bp.get("is_dir", False)
                 zip_prefix = bp.get("zip_path", "")
 

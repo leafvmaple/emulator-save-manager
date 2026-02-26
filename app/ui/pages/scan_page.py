@@ -21,6 +21,7 @@ from qfluentwidgets import (
     SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
     PrimaryPushButton, PushButton, TransparentToolButton,
     CardWidget, SimpleCardWidget, SmoothScrollArea,
+    SingleDirectionScrollArea,
     FluentIcon as FIF, InfoBar, InfoBarPosition,
     ProgressRing, setFont, RoundMenu, Action,
     IconWidget, InfoBadge, SearchLineEdit,
@@ -107,9 +108,7 @@ class _EmulatorCard(CardWidget):
 
     def __init__(self, emu: EmulatorInfo, save_count: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(90)
-        self.setMinimumWidth(200)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedSize(300, 90)
 
         root = QHBoxLayout(self)
         root.setContentsMargins(16, 12, 16, 12)
@@ -141,17 +140,10 @@ class _EmulatorCard(CardWidget):
             plat_label.setStyleSheet("color:#666;")
             col.addWidget(plat_label)
 
-        meta = QHBoxLayout()
-        meta.setSpacing(10)
-        meta.addWidget(CaptionLabel(
+        saves_label = CaptionLabel(
             f"{t('scan.saves_count')}: {save_count}", self
-        ))
-        path_text = str(emu.data_path)
-        if len(path_text) > 35:
-            path_text = "…" + path_text[-32:]
-        meta.addWidget(CaptionLabel(path_text, self))
-        meta.addStretch()
-        col.addLayout(meta)
+        )
+        col.addWidget(saves_label)
 
         root.addLayout(col, 1)
 
@@ -499,9 +491,15 @@ class ScanPage(QWidget):
         action_bar.setSpacing(12)
 
         self._scan_btn = PrimaryPushButton(FIF.SEARCH, t("scan.start_scan"), self)
-        self._scan_btn.setFixedWidth(160)
-        self._scan_btn.clicked.connect(self._on_scan)
-        action_bar.addWidget(self._scan_btn)
+        self._scan_btn.setFixedWidth(120)
+        # Search
+        self._search = SearchLineEdit(self)
+        self._search.setPlaceholderText(t("common.search"))
+        self._search.setFixedWidth(280)
+        self._search.textChanged.connect(self._on_search)
+        action_bar.addWidget(self._search)
+
+        action_bar.addStretch()
 
         self._progress = ProgressRing(self)
         self._progress.setFixedSize(24, 24)
@@ -511,21 +509,26 @@ class ScanPage(QWidget):
         self._status_label = CaptionLabel("", self)
         action_bar.addWidget(self._status_label)
 
-        action_bar.addStretch()
-
-        # Search
-        self._search = SearchLineEdit(self)
-        self._search.setPlaceholderText(t("common.search"))
-        self._search.setFixedWidth(200)
-        self._search.textChanged.connect(self._on_search)
-        action_bar.addWidget(self._search)
+        self._scan_btn.clicked.connect(self._on_scan)
+        action_bar.addWidget(self._scan_btn)
 
         page.addLayout(action_bar)
 
-        # Emulator cards row
-        self._emu_row = QHBoxLayout()
+        # Emulator cards row (horizontally scrollable)
+        self._emu_scroll = SingleDirectionScrollArea(self, orient=Qt.Orientation.Horizontal)
+        self._emu_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._emu_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._emu_scroll.enableTransparentBackground()
+        self._emu_scroll.setFixedHeight(100)
+        self._emu_scroll.hide()
+        self._emu_scroll_inner = QWidget()
+        self._emu_scroll_inner.setStyleSheet("background: transparent;")
+        self._emu_scroll_inner.setFixedHeight(90)
+        self._emu_row = QHBoxLayout(self._emu_scroll_inner)
         self._emu_row.setSpacing(10)
-        page.addLayout(self._emu_row)
+        self._emu_row.setContentsMargins(0, 0, 0, 0)
+        self._emu_scroll.setWidget(self._emu_scroll_inner)
+        page.addWidget(self._emu_scroll)
 
         # Save count badge
         count_row = QHBoxLayout()
@@ -571,6 +574,7 @@ class ScanPage(QWidget):
 
         self._scan_btn.setEnabled(False)
         self._scan_btn.setText(t("scan.scanning"))
+        self.setFocus()  # prevent focus jumping to search bar
         self._progress.show()
         self._status_label.setText(t("scan.scanning"))
 
@@ -648,10 +652,15 @@ class ScanPage(QWidget):
 
         for emu in self._emulators:
             count = sum(1 for s in self._saves if s.emulator == emu.name)
-            card = _EmulatorCard(emu, count, self)
+            card = _EmulatorCard(emu, count, self._emu_scroll_inner)
             self._emu_row.addWidget(card)
             self._emu_cards.append(card)
-        self._emu_row.addStretch()
+        # Resize inner widget so it can overflow the viewport and scroll
+        n = len(self._emu_cards)
+        if n > 0:
+            total_w = n * 300 + (n - 1) * self._emu_row.spacing()
+            self._emu_scroll_inner.setMinimumWidth(total_w)
+        self._emu_scroll.setVisible(n > 0)
 
     def _refresh_game_cards(self, filter_text: str = "") -> None:
         for c in self._game_cards:

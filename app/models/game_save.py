@@ -41,7 +41,6 @@ class SaveFile:
             self.size = stat.st_size
             self.modified = datetime.fromtimestamp(stat.st_mtime)
 
-
 @dataclass
 class GameSave:
     """Represents all save data for a single game in one emulator."""
@@ -55,7 +54,7 @@ class GameSave:
     game_id: str
     """Unique game identifier (serial number, ROM filename, etc.)."""
 
-    save_files: list[SaveFile] = field(default_factory=list)
+    save_files: list[SaveFile] = field(default_factory=list[SaveFile])
     """List of save files belonging to this game."""
 
     platform: str = ""
@@ -64,6 +63,10 @@ class GameSave:
     crc32: str = ""
     """CRC32 checksum of the game disc (hex string, e.g. '083F0E03').
     Used for cross-device sync verification — mismatches indicate different game versions."""
+
+    data_path: Path | None = None
+    """Emulator data directory this save lives under.
+    Used to compute relative paths for portable backup metadata."""
 
     @property
     def total_size(self) -> int:

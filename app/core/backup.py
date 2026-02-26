@@ -60,8 +60,9 @@ class BackupManager:
         game_name = ref.game_name
         platform = ref.platform
         crc32 = ref.crc32
+        emu_data_path = ref.data_path
 
-        # Prefer a human-readable display name / a non-empty CRC
+        # Prefer a human-readable display name / a non-empty CRC / data_path
         for s in saves:
             if s.game_name != s.game_id:
                 game_name = s.game_name
@@ -69,6 +70,10 @@ class BackupManager:
         for s in saves:
             if s.crc32:
                 crc32 = s.crc32
+                break
+        for s in saves:
+            if s.data_path is not None:
+                emu_data_path = s.data_path
                 break
 
         now = datetime.now()
@@ -95,7 +100,7 @@ class BackupManager:
                                     arc_name = f"{zip_prefix}/{rel.as_posix()}"
                                     zf.write(child, arc_name)
                             backup_paths.append({
-                                "source": to_portable_path(sf.path),
+                                "source": to_portable_path(sf.path, emu_data_path),
                                 "type": type_prefix,
                                 "zip_path": f"{zip_prefix}/",
                                 "is_dir": True,
@@ -104,7 +109,7 @@ class BackupManager:
                             arc_name = f"{type_prefix}/{sf.path.name}"
                             zf.write(sf.path, arc_name)
                             backup_paths.append({
-                                "source": to_portable_path(sf.path),
+                                "source": to_portable_path(sf.path, emu_data_path),
                                 "type": type_prefix,
                                 "zip_path": arc_name,
                                 "is_dir": False,
@@ -114,6 +119,11 @@ class BackupManager:
                         raise
 
         # Write sidecar metadata
+        # Store the emulator data_path as a portable string so restore
+        # on a different machine can map ${EMU_DATA} correctly.
+        portable_data_path = (
+            to_portable_path(emu_data_path) if emu_data_path else ""
+        )
         info = BackupInfo(
             title=game_name,
             game_id=game_id,
@@ -122,6 +132,7 @@ class BackupManager:
             backup_paths=backup_paths,
             source_machine=self._cfg.machine_id,
             crc32=crc32,
+            emulator_data_path=portable_data_path,
         )
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(info.to_dict(), f, indent=4, ensure_ascii=False)

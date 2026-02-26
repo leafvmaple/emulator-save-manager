@@ -65,6 +65,10 @@ class Scanner:
                 ]
                 logger.info("Scanning saves for {} at {}", emu_info.name, emu_info.data_path)
                 saves = plugin.scan_saves(emu_info, custom_paths or None)
+                # Attach emulator data_path so backups can store relative paths
+                for s in saves:
+                    if s.data_path is None:
+                        s.data_path = emu_info.data_path
                 self._scanned_saves.extend(saves)
             except Exception as e:
                 logger.error("Error scanning saves for {}: {}", emu_info.name, e)

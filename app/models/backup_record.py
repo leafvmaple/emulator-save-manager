@@ -55,6 +55,9 @@ class BackupInfo:
     label: str = ""
     source_machine: str = ""
     crc32: str = ""
+    emulator_data_path: str = ""
+    """Portable path of the emulator data directory at backup time.
+    Used to resolve ``${EMU_DATA}`` placeholders on restore."""
 
     def to_dict(self) -> dict:
         return {
@@ -67,6 +70,7 @@ class BackupInfo:
             "label": self.label,
             "source_machine": self.source_machine,
             "crc32": self.crc32,
+            "emulator_data_path": self.emulator_data_path,
         }
 
     @classmethod
@@ -78,6 +82,7 @@ class BackupInfo:
             platform=data.get("platform", ""),
             backup_paths=data.get("backup_paths", []),
             is_pinned=data.get("is_pinned", False),
+            emulator_data_path=data.get("emulator_data_path", ""),
             label=data.get("label", ""),
             source_machine=data.get("source_machine", ""),
             crc32=data.get("crc32", ""),
