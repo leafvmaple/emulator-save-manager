@@ -17,18 +17,22 @@ def setup_logger(log_dir: Path | None = None) -> None:
     # Remove default handler
     logger.remove()
 
-    # Console handler — coloured, INFO level
-    logger.add(
-        sys.stderr,
-        level="DEBUG",
-        format=(
-            "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
-            "<level>{level: <8}</level> | "
-            "<cyan>{module}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
-            "<level>{message}</level>"
-        ),
-        colorize=True,
-    )
+    # Console handler — coloured, DEBUG level.
+    # In a PyInstaller --windowed build there is no console, so sys.stderr is
+    # None; adding it would raise "Cannot log to objects of type 'NoneType'"
+    # and crash the app at startup. Only attach a console sink when one exists.
+    if sys.stderr is not None:
+        logger.add(
+            sys.stderr,
+            level="DEBUG",
+            format=(
+                "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
+                "<level>{level: <8}</level> | "
+                "<cyan>{module}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
+                "<level>{message}</level>"
+            ),
+            colorize=True,
+        )
 
     # File handler — rotating, DEBUG level
     if log_dir is None:
