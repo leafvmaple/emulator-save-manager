@@ -28,7 +28,10 @@ A cross-platform emulator save manager with multi-device sync. Auto-detects inst
 | PCSX2 | PCSX2 | PS2 | Memory Card (image & folder), Save States |
 | Mesen | Mesen2 | NES, SNES, Game Boy, GBA, PC Engine, SMS, WonderSwan | Battery Saves, Save States |
 | Snes9x | Snes9x | SNES | Battery Saves (.srm), Save States |
-| Citra | Citra | Nintendo 3DS | Application Saves, Save States |
+| Citra | Citra / Lime3DS | Nintendo 3DS | Application Saves, Extra Data, Save States |
+| Dolphin | Dolphin | GameCube, Wii | Memory Cards, GCI, Wii NAND, Save States |
+| melonDS | melonDS | Nintendo DS | Battery Saves (.dsv), Save States |
+| RetroArch | RetroArch | Multi-System (all libretro cores) | SRAM/battery saves, Save States |
 
 ## Platform Support
 
