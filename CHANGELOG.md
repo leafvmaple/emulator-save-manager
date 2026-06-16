@@ -1,3 +1,20 @@
+# v0.3.0
+
+Released on 2026-06-16
+
+## ✨ Features
+
+- feat: add Dolphin and melonDS plugins, portable emulator-relative paths (`b2c4a5b`)
+- feat: add README (`5284722`)
+- feat: portable path resolver, expandable file details, and UI polish (`f01c1d5`)
+
+## 🐛 Bug Fixes
+
+- fix: make sync/restore/packaging actually work (stage 0) (`b2b84c5`)
+- fix: fixed CHANGELOG.md (`38df16a`)
+
+---
+
 # v0.2.1 Release Notes
 
 Released on 2026-02-25
@@ -17,4 +34,3 @@ Released on 2026-02-25
 ## 📦 Other Changes
 
 - chore(release): v0.2.0 (`9cf479e`)
-
