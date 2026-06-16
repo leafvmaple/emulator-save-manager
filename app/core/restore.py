@@ -1,8 +1,16 @@
-"""Restore engine — extracts ZIP backup archives back to original emulator locations."""
+"""Restore engine — extracts ZIP backup archives back to original emulator locations.
+
+Restores are **transactional**: every destination that will be touched is
+snapshotted first, so if any file fails to write the whole operation is rolled
+back to the exact pre-restore state.  A save manager must never leave a save
+half-overwritten.
+"""
 
 from __future__ import annotations
 
 import json
+import shutil
+import tempfile
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime
@@ -122,6 +130,10 @@ class RestoreManager:
     def restore_backup(self, record: BackupRecord, force: bool = False) -> list[str]:
         """Restore files from a ZIP backup to their original locations.
 
+        The operation is all-or-nothing: every destination is snapshotted
+        before any write, and if any file fails the whole restore is rolled
+        back to the pre-restore state.
+
         Parameters
         ----------
         record : BackupRecord
@@ -132,33 +144,55 @@ class RestoreManager:
         Returns
         -------
         list[str]
-            List of error messages (empty on full success).
+            List of error messages (empty on full success).  A non-empty
+            result means nothing was changed (rollback succeeded) — unless a
+            rollback error is also present.
         """
-        errors: list[str] = []
         zip_path = record.backup_path
         meta_path = zip_path.with_suffix(".json")
 
         if not zip_path.exists():
-            errors.append(f"Backup zip not found: {zip_path}")
-            return errors
+            return [f"Backup zip not found: {zip_path}"]
         if not meta_path.exists():
-            errors.append(f"Backup metadata not found: {meta_path}")
-            return errors
+            return [f"Backup metadata not found: {meta_path}"]
 
         with open(meta_path, "r", encoding="utf-8") as f:
             info = json.load(f)
 
         emu_data_path = _resolve_emu_data_path(info, self._detected_emulators)
 
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            for bp in info.get("backup_paths", []):
-                source_path = resolve_path(bp["source"], emu_data_path)
-                is_dir = bp.get("is_dir", False)
-                zip_prefix = bp.get("zip_path", "")
+        # Resolve every destination up front.
+        targets: list[tuple[dict, Path]] = []
+        for bp in info.get("backup_paths", []):
+            targets.append((bp, resolve_path(bp["source"], emu_data_path)))
 
-                try:
+        # --- Snapshot phase: copy aside everything we may overwrite ---
+        snapshot_dir = Path(tempfile.mkdtemp(prefix="esm_restore_"))
+        # (source_path, snapshot_path_or_None, existed_before)
+        snapshots: list[tuple[Path, Path | None, bool]] = []
+        try:
+            for i, (_bp, source_path) in enumerate(targets):
+                if source_path.exists():
+                    snap = snapshot_dir / str(i)
+                    if source_path.is_dir():
+                        shutil.copytree(source_path, snap)
+                    else:
+                        shutil.copy2(source_path, snap)
+                    snapshots.append((source_path, snap, True))
+                else:
+                    snapshots.append((source_path, None, False))
+        except Exception as e:
+            shutil.rmtree(snapshot_dir, ignore_errors=True)
+            logger.error("Failed to snapshot before restore: {}", e)
+            return [f"Failed to snapshot before restore: {e}"]
+
+        # --- Write phase: any failure triggers a full rollback ---
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                for bp, source_path in targets:
+                    is_dir = bp.get("is_dir", False)
+                    zip_prefix = bp.get("zip_path", "")
                     if is_dir:
-                        # Restore folder: extract all files under zip_prefix
                         source_path.mkdir(parents=True, exist_ok=True)
                         for entry in zf.infolist():
                             if entry.filename.startswith(zip_prefix) and not entry.is_dir():
@@ -169,21 +203,54 @@ class RestoreManager:
                                     dst.write(src.read())
                         logger.info("Restored folder → {}", source_path)
                     else:
-                        # Restore single file
                         source_path.parent.mkdir(parents=True, exist_ok=True)
                         with zf.open(zip_prefix) as src, open(source_path, "wb") as dst:
                             dst.write(src.read())
                         logger.info("Restored file → {}", source_path)
-                except Exception as e:
-                    msg = f"Error restoring {zip_prefix}: {e}"
-                    logger.error(msg)
-                    errors.append(msg)
+        except Exception as e:
+            msg = f"Restore failed ({e}); rolling back changes"
+            logger.error(msg)
+            errors = [msg]
+            errors.extend(self._rollback(snapshots))
+            shutil.rmtree(snapshot_dir, ignore_errors=True)
+            return errors
 
-        return errors
+        shutil.rmtree(snapshot_dir, ignore_errors=True)
+        return []
 
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _rollback(
+        snapshots: list[tuple[Path, Path | None, bool]],
+    ) -> list[str]:
+        """Restore destinations to their pre-restore state after a failure.
+
+        For destinations that existed, the snapshot is copied back; for those
+        that were newly created during the restore, whatever was written is
+        removed.  Processed in reverse order so earlier writes are undone last.
+        """
+        errors: list[str] = []
+        for source_path, snap, existed in reversed(snapshots):
+            try:
+                # Clear whatever the failed restore left behind.
+                if source_path.is_dir():
+                    shutil.rmtree(source_path, ignore_errors=True)
+                elif source_path.exists():
+                    source_path.unlink()
+
+                if existed and snap is not None:
+                    if snap.is_dir():
+                        shutil.copytree(snap, source_path)
+                    else:
+                        source_path.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(snap, source_path)
+            except Exception as e:
+                errors.append(f"Rollback failed for {source_path}: {e}")
+                logger.error("Rollback failed for {}: {}", source_path, e)
+        return errors
 
     @staticmethod
     def _make_change(entry: zipfile.ZipInfo, dst: Path) -> FileChange:
