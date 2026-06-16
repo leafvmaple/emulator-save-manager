@@ -72,7 +72,10 @@ def main() -> None:
     logger.info("Window shown, entering event loop")
 
     # ---- 8. Optional auto-start actions ----
-    if config.auto_scan_on_start:
+    if config.auto_backup_on_start:
+        logger.info("Auto-backup on start enabled")
+        window.start_auto_backup_cycle()  # scans, then backs up changed saves
+    elif config.auto_scan_on_start:
         logger.info("Auto-scan on start enabled")
         window.scan_page.start_scan()
     if config.auto_sync_on_start and sync_mgr.is_configured:

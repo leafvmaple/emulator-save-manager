@@ -50,7 +50,9 @@
         "backup_success": "Successfully backed up {count} saves",
         "backup_fail": "Backup failed: {error}",
         "no_selection": "Please select saves to back up first",
-        "file_group": "{type} ({count} files)"
+        "file_group": "{type} ({count} files)",
+        "auto_backup_done": "Auto-backup complete",
+        "auto_backup_summary": "{backed} backed up, {skipped} unchanged"
     },
     "restore": {
         "title": "Save Restore",
@@ -133,6 +135,10 @@
         "auto_scan_desc": "Automatically detect emulators and saves after launch",
         "auto_sync": "Auto-sync on Startup",
         "auto_sync_desc": "Automatically sync remote saves after launch",
+        "auto_backup": "Auto-backup on Startup",
+        "auto_backup_desc": "Back up changed saves automatically after the startup scan",
+        "auto_backup_interval": "Auto-backup interval (minutes)",
+        "auto_backup_interval_desc": "Scan and back up changed saves every N minutes (0 = off)",
         "emulator_paths": "Emulator Custom Paths",
         "emulator_paths_group": "Emulator Paths",
         "emulator_paths_desc": "Configure paths for emulators whose saves are in non-standard locations",

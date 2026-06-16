@@ -37,10 +37,40 @@ def test_mainwindow_constructs(qtbot, cfg):
 def test_stage0_workers_instantiate(qtbot, cfg):
     from app.ui.pages.sync_page import _SyncWorker, _ResolveWorker
     from app.ui.pages.restore_page import _RestoreWorker
+    from app.ui.pages.backup_page import _AutoBackupWorker
 
-    for worker_cls in (_SyncWorker, _ResolveWorker, _RestoreWorker):
+    for worker_cls in (_SyncWorker, _ResolveWorker, _RestoreWorker, _AutoBackupWorker):
         w = worker_cls()
         assert w is not None
+
+
+def test_auto_backup_wiring(qtbot, cfg):
+    from app.ui.main_window import MainWindow
+
+    w = MainWindow(cfg)
+    qtbot.addWidget(w)
+    assert hasattr(w, "start_auto_backup_cycle")
+    assert hasattr(w.backup_page, "auto_backup")
+    assert hasattr(w.scan_page, "is_scanning")
+    # interval defaults to 0 → no timer created.
+    assert w._auto_timer is None
+
+
+def test_auto_backup_worker_end_to_end(qtbot, cfg, make_game_save, tmp_path):
+    """The background worker actually drives auto_backup_all and creates a backup."""
+    from app.ui.pages.backup_page import _AutoBackupWorker
+    from app.core.backup import BackupManager
+
+    bm = BackupManager(cfg)
+    gs = make_game_save(tmp_path / "s", files={"a.bin": b"X"})
+
+    worker = _AutoBackupWorker()
+    worker.set_data(bm, [gs])
+    with qtbot.waitSignal(worker.finished, timeout=5000) as blocker:
+        worker.start()
+
+    assert blocker.args[0].backed_up == 1
+    assert bm.list_backups(gs.emulator, gs.game_id)
 
 
 def test_conflict_dialogs_build(qtbot, cfg):

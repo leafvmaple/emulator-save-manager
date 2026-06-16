@@ -61,6 +61,9 @@ class BackupInfo:
     content_hash: str = ""
     """SHA-256 over the archive's decompressed content (timestamp-independent).
     Used by sync to distinguish identical content from real conflicts."""
+    source_hash: str = ""
+    """SHA-256 over the live save files at backup time.
+    Used by auto-backup to skip games whose saves haven't changed."""
 
     def to_dict(self) -> dict:
         return {
@@ -75,6 +78,7 @@ class BackupInfo:
             "crc32": self.crc32,
             "emulator_data_path": self.emulator_data_path,
             "content_hash": self.content_hash,
+            "source_hash": self.source_hash,
         }
 
     @classmethod
@@ -91,4 +95,5 @@ class BackupInfo:
             source_machine=data.get("source_machine", ""),
             crc32=data.get("crc32", ""),
             content_hash=data.get("content_hash", ""),
+            source_hash=data.get("source_hash", ""),
         )

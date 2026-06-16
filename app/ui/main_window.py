@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
@@ -29,9 +29,13 @@ class MainWindow(FluentWindow):
     def __init__(self, config: Config) -> None:
         super().__init__()
         self._cfg = config
+        self._auto_backup_pending = False
+        self._auto_timer: QTimer | None = None
         self._init_window()
         self._init_pages()
         self._apply_theme()
+        self.scan_page.saves_updated.connect(self._on_saves_updated)
+        self._setup_auto_backup_timer()
 
     # ------------------------------------------------------------------
     # Initialization
@@ -88,3 +92,31 @@ class MainWindow(FluentWindow):
 
     def get_config(self) -> Config:
         return self._cfg
+
+    # ------------------------------------------------------------------
+    # Auto-backup
+    # ------------------------------------------------------------------
+
+    def start_auto_backup_cycle(self) -> None:
+        """Scan, then auto-backup changed saves once the scan finishes."""
+        self._auto_backup_pending = True
+        self.scan_page.start_scan()
+
+    def _setup_auto_backup_timer(self) -> None:
+        minutes = self._cfg.auto_backup_interval_minutes
+        if minutes > 0:
+            self._auto_timer = QTimer(self)
+            self._auto_timer.setInterval(minutes * 60 * 1000)
+            self._auto_timer.timeout.connect(self._on_auto_timer)
+            self._auto_timer.start()
+
+    def _on_auto_timer(self) -> None:
+        # Skip this tick if a scan is already running (e.g. a manual one).
+        if self.scan_page.is_scanning:
+            return
+        self.start_auto_backup_cycle()
+
+    def _on_saves_updated(self, saves: list) -> None:
+        if self._auto_backup_pending:
+            self._auto_backup_pending = False
+            self.backup_page.auto_backup(saves)

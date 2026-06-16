@@ -12,8 +12,10 @@ needs to copy one file.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import zipfile
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -24,6 +26,51 @@ from app.models.backup_record import BackupInfo, BackupRecord
 from app.models.game_save import GameSave
 from app.core.conflict import zip_content_hash
 from app.core.path_resolver import to_portable_path
+
+
+def source_content_hash(saves: list[GameSave]) -> str:
+    """SHA-256 over the live save files of a game (order-independent).
+
+    Hashes each file's path-key and bytes in a stable sorted order so the
+    same on-disk state always yields the same digest — letting auto-backup
+    tell "nothing changed" from "needs a new backup".
+    """
+    entries: list[tuple[str, Path]] = []
+    for gs in saves:
+        for sf in gs.save_files:
+            try:
+                if sf.path.is_dir():
+                    for f in sf.path.rglob("*"):
+                        if f.is_file():
+                            key = f"{sf.save_type.value}/{sf.path.name}/{f.relative_to(sf.path).as_posix()}"
+                            entries.append((key, f))
+                elif sf.path.is_file():
+                    entries.append((f"{sf.save_type.value}/{sf.path.name}", sf.path))
+            except OSError:
+                continue
+
+    h = hashlib.sha256()
+    for key, f in sorted(entries, key=lambda x: x[0]):
+        h.update(key.encode("utf-8"))
+        h.update(b"\x00")
+        try:
+            with open(f, "rb") as fh:
+                for chunk in iter(lambda: fh.read(8192), b""):
+                    h.update(chunk)
+        except OSError:
+            continue
+    return h.hexdigest()
+
+
+@dataclass
+class AutoBackupResult:
+    """Outcome of an auto-backup sweep over many games."""
+
+    backed_up: int = 0
+    skipped: int = 0
+    errors: list[str] = field(default_factory=list)
+    games: list[str] = field(default_factory=list)
+    """Display names of the games that were actually backed up."""
 
 
 class BackupManager:
@@ -78,9 +125,17 @@ class BackupManager:
                 break
 
         now = datetime.now()
-        ts = now.strftime("%Y-%m-%d_%H-%M")
         game_dir = self.backup_root / emulator / game_id
         game_dir.mkdir(parents=True, exist_ok=True)
+
+        # Second-granular timestamp + a collision guard so rapid backups
+        # (e.g. auto-backup) never overwrite each other.
+        ts_base = now.strftime("%Y-%m-%d_%H-%M-%S")
+        ts = ts_base
+        counter = 1
+        while (game_dir / f"{ts}.zip").exists():
+            counter += 1
+            ts = f"{ts_base}_{counter}"
 
         zip_path = game_dir / f"{ts}.zip"
         meta_path = game_dir / f"{ts}.json"
@@ -128,6 +183,8 @@ class BackupManager:
         # Stable, timestamp-independent hash of the archive content so sync
         # can tell identical saves apart from genuine conflicts.
         content_hash = zip_content_hash(zip_path)
+        # Hash of the live source files so auto-backup can skip unchanged games.
+        source_hash = source_content_hash(saves)
         info = BackupInfo(
             title=game_name,
             game_id=game_id,
@@ -138,6 +195,7 @@ class BackupManager:
             crc32=crc32,
             emulator_data_path=portable_data_path,
             content_hash=content_hash,
+            source_hash=source_hash,
         )
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(info.to_dict(), f, indent=4, ensure_ascii=False)
@@ -164,6 +222,77 @@ class BackupManager:
         self.rotate_backups(emulator, game_id)
         return record
 
+    def backup_if_changed(self, saves: list[GameSave]) -> BackupRecord | None:
+        """Create a backup only if the saves differ from the latest backup.
+
+        Returns the new :class:`BackupRecord`, or ``None`` if the live saves
+        are byte-identical to the most recent backup (nothing to do).
+        """
+        if not saves:
+            return None
+        ref = saves[0]
+        live_hash = source_content_hash(saves)
+
+        existing = self.list_backups(ref.emulator, ref.game_id)
+        if existing:
+            stored = self._read_source_hash(existing[0].backup_path)
+            if stored and stored == live_hash:
+                logger.debug("Auto-backup skipped (unchanged): {}", ref.game_name)
+                return None
+
+        return self.create_backup(saves)
+
+    def auto_backup_all(self, saves: list[GameSave]) -> AutoBackupResult:
+        """Back up every changed game among *saves*, skipping unchanged ones."""
+        result = AutoBackupResult()
+        groups: dict[str, list[GameSave]] = {}
+        for s in saves:
+            groups.setdefault(f"{s.emulator}:{s.game_id}", []).append(s)
+
+        for _key, gsaves in groups.items():
+            try:
+                record = self.backup_if_changed(gsaves)
+                if record is not None:
+                    result.backed_up += 1
+                    result.games.append(gsaves[0].game_name)
+                else:
+                    result.skipped += 1
+            except Exception as e:
+                result.errors.append(f"{gsaves[0].game_name}: {e}")
+                logger.error("Auto-backup failed for {}: {}", gsaves[0].game_name, e)
+
+        logger.info(
+            "Auto-backup: {} backed up, {} unchanged, {} errors",
+            result.backed_up, result.skipped, len(result.errors),
+        )
+        return result
+
+    @staticmethod
+    def _parse_backup_time(zip_path: Path) -> datetime:
+        """Derive a backup's timestamp from its filename, falling back to mtime.
+
+        Handles both the second-granular format and the older minute-granular
+        one; a collision suffix (``…_2``) just falls through to mtime.
+        """
+        stem = zip_path.stem
+        for fmt in ("%Y-%m-%d_%H-%M-%S", "%Y-%m-%d_%H-%M"):
+            try:
+                return datetime.strptime(stem, fmt)
+            except ValueError:
+                continue
+        return datetime.fromtimestamp(zip_path.stat().st_mtime)
+
+    @staticmethod
+    def _read_source_hash(zip_path: Path) -> str:
+        meta_path = zip_path.with_suffix(".json")
+        if not meta_path.exists():
+            return ""
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                return json.load(f).get("source_hash", "")
+        except Exception:
+            return ""
+
     def list_backups(self, emulator: str, game_id: str) -> list[BackupRecord]:
         """List all backup records for a given game, sorted newest-first."""
         game_dir = self.backup_root / emulator / game_id
@@ -179,10 +308,7 @@ class BackupManager:
                 with open(meta_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 info = BackupInfo.from_dict(data)
-                try:
-                    bt = datetime.strptime(zp.stem, "%Y-%m-%d_%H-%M")
-                except ValueError:
-                    bt = datetime.fromtimestamp(zp.stat().st_mtime)
+                bt = self._parse_backup_time(zp)
 
                 gs = GameSave(
                     emulator=info.emulator,

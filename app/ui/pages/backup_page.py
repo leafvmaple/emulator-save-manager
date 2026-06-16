@@ -69,6 +69,28 @@ class _BackupWorker(QThread):
         self.finished.emit(success, errors)
 
 
+class _AutoBackupWorker(QThread):
+    """Background thread that backs up only the games whose saves changed."""
+
+    finished = Signal(object)  # AutoBackupResult
+    error = Signal(str)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._backup_manager = None
+        self._saves: list[GameSave] = []
+
+    def set_data(self, backup_manager, saves: list[GameSave]) -> None:  # noqa: ANN001
+        self._backup_manager = backup_manager
+        self._saves = saves
+
+    def run(self) -> None:
+        try:
+            self.finished.emit(self._backup_manager.auto_backup_all(self._saves))
+        except Exception as e:
+            self.error.emit(str(e))
+
+
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------
@@ -257,6 +279,7 @@ class BackupPage(QWidget):
         self._saves: list[GameSave] = []
         self._backup_manager = None
         self._worker: _BackupWorker | None = None
+        self._auto_worker: _AutoBackupWorker | None = None
         self._cards: list[_GameCard] = []
         self._icon_provider: GameIconProvider | None = None
         self._init_ui()
@@ -269,6 +292,32 @@ class BackupPage(QWidget):
 
     def update_saves(self, saves: list[GameSave]) -> None:
         self._saves = saves
+        self._refresh_cards()
+
+    def auto_backup(self, saves: list[GameSave]) -> None:
+        """Back up changed saves in the background (called by the auto cycle)."""
+        if self._backup_manager is None or not saves:
+            return
+        if self._auto_worker is not None and self._auto_worker.isRunning():
+            return
+        self._auto_worker = _AutoBackupWorker(self)
+        self._auto_worker.set_data(self._backup_manager, saves)
+        self._auto_worker.finished.connect(self._on_auto_backup_finished)
+        self._auto_worker.error.connect(
+            lambda e: logger.error("Auto-backup error: {}", e)
+        )
+        self._auto_worker.start()
+
+    def _on_auto_backup_finished(self, result) -> None:  # noqa: ANN001
+        # Stay quiet when nothing changed, so periodic cycles aren't noisy.
+        if result.backed_up > 0:
+            InfoBar.success(
+                title=t("backup.auto_backup_done"),
+                content=t("backup.auto_backup_summary",
+                          backed=str(result.backed_up), skipped=str(result.skipped)),
+                parent=self, position=InfoBarPosition.TOP, duration=4000,
+            )
+        # Refresh card counts (a new backup may have been created).
         self._refresh_cards()
 
     # ------------------------------------------------------------------

@@ -31,6 +31,8 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "emulators": {},
     "auto_scan_on_start": False,
     "auto_sync_on_start": False,
+    "auto_backup_on_start": False,
+    "auto_backup_interval_minutes": 0,
 }
 
 
@@ -101,6 +103,17 @@ class Config:
     @property
     def auto_sync_on_start(self) -> bool:
         return bool(self._data.get("auto_sync_on_start", False))
+
+    @property
+    def auto_backup_on_start(self) -> bool:
+        return bool(self._data.get("auto_backup_on_start", False))
+
+    @property
+    def auto_backup_interval_minutes(self) -> int:
+        try:
+            return max(0, int(self._data.get("auto_backup_interval_minutes", 0)))
+        except (TypeError, ValueError):
+            return 0
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)

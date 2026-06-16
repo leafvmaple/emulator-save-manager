@@ -50,7 +50,9 @@
         "backup_success": "{count} 個のセーブをバックアップしました",
         "backup_fail": "バックアップ失敗: {error}",
         "no_selection": "バックアップするセーブを選択してください",
-        "file_group": "{type} ({count} ファイル)"
+        "file_group": "{type} ({count} ファイル)",
+        "auto_backup_done": "自動バックアップ完了",
+        "auto_backup_summary": "{backed} 件バックアップ、{skipped} 件変更なし"
     },
     "restore": {
         "title": "セーブ復元",
@@ -133,6 +135,10 @@
         "auto_scan_desc": "起動後にエミュレータとセーブを自動検出",
         "auto_sync": "起動時に自動同期",
         "auto_sync_desc": "起動後にリモートセーブを自動同期",
+        "auto_backup": "起動時に自動バックアップ",
+        "auto_backup_desc": "起動時のスキャン後、変更されたセーブを自動バックアップ",
+        "auto_backup_interval": "自動バックアップ間隔（分）",
+        "auto_backup_interval_desc": "N分ごとにスキャンして変更を自動バックアップ（0 = 無効）",
         "emulator_paths": "エミュレータカスタムパス",
         "emulator_paths_group": "エミュレータパス",
         "emulator_paths_desc": "セーブが標準以外の場所にあるエミュレータのパスを設定",

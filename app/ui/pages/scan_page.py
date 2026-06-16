@@ -476,6 +476,10 @@ class ScanPage(QWidget):
         """Public entry point for triggering a scan (e.g. on startup)."""
         self._on_scan()
 
+    @property
+    def is_scanning(self) -> bool:
+        return self._worker is not None and self._worker.isRunning()
+
     # ------------------------------------------------------------------
     # UI Setup
     # ------------------------------------------------------------------

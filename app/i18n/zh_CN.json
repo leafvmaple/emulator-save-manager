@@ -50,7 +50,9 @@
         "backup_success": "成功备份 {count} 个游戏存档",
         "backup_fail": "备份失败: {error}",
         "no_selection": "请先选择要备份的存档",
-        "file_group": "{type} ({count} 个文件)"
+        "file_group": "{type} ({count} 个文件)",
+        "auto_backup_done": "自动备份完成",
+        "auto_backup_summary": "已备份 {backed} 个，{skipped} 个无变化"
     },
     "restore": {
         "title": "存档还原",
@@ -133,6 +135,10 @@
         "auto_scan_desc": "应用启动后自动检测模拟器和存档",
         "auto_sync": "启动时自动同步",
         "auto_sync_desc": "应用启动后自动同步远端存档",
+        "auto_backup": "启动时自动备份",
+        "auto_backup_desc": "启动扫描后自动备份有变化的存档",
+        "auto_backup_interval": "自动备份间隔（分钟）",
+        "auto_backup_interval_desc": "每隔指定分钟自动扫描并备份变化的存档（0 = 关闭）",
         "emulator_paths": "模拟器自定义路径",
         "emulator_paths_group": "模拟器路径",
         "emulator_paths_desc": "为存档不在固定位置的模拟器配置安装路径",

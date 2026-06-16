@@ -57,6 +57,12 @@ class _AppQConfig(QConfig):
     auto_sync = ConfigItem(
         "General", "AutoSync", False, BoolValidator(),
     )
+    auto_backup = ConfigItem(
+        "Backup", "AutoBackup", False, BoolValidator(),
+    )
+    auto_backup_interval = RangeConfigItem(
+        "Backup", "AutoBackupInterval", 0, RangeValidator(0, 180),
+    )
 
 
 _app_qconfig = _AppQConfig()
@@ -360,6 +366,24 @@ class SettingsPage(QWidget):
         )
         backup_group.addSettingCard(self._max_backup_card)
 
+        self._auto_backup_card = SwitchSettingCard(
+            FIF.SAVE,
+            t("settings.auto_backup"),
+            t("settings.auto_backup_desc"),
+            _app_qconfig.auto_backup,
+            parent=backup_group,
+        )
+        backup_group.addSettingCard(self._auto_backup_card)
+
+        self._auto_backup_interval_card = RangeSettingCard(
+            _app_qconfig.auto_backup_interval,
+            FIF.STOP_WATCH,
+            t("settings.auto_backup_interval"),
+            t("settings.auto_backup_interval_desc"),
+            parent=backup_group,
+        )
+        backup_group.addSettingCard(self._auto_backup_interval_card)
+
         layout.addWidget(backup_group)
 
         # --- Sync group ---
@@ -424,6 +448,12 @@ class SettingsPage(QWidget):
         _app_qconfig.auto_sync.valueChanged.connect(
             lambda v: self._save("auto_sync_on_start", v)
         )
+        _app_qconfig.auto_backup.valueChanged.connect(
+            lambda v: self._save("auto_backup_on_start", v)
+        )
+        _app_qconfig.auto_backup_interval.valueChanged.connect(
+            lambda v: self._save("auto_backup_interval_minutes", v)
+        )
 
     # ------------------------------------------------------------------
     # Sync config → UI
@@ -437,6 +467,14 @@ class SettingsPage(QWidget):
         sf = self._config.sync_folder
         if sf and sf.exists():
             self._sync_dir_card.setContent(str(sf))
+
+        # Reflect persisted automation settings in their toggles/sliders.
+        # (These handlers only re-save the same value — no side effects.)
+        _app_qconfig.max_backups.value = self._config.max_backups
+        _app_qconfig.auto_scan.value = self._config.auto_scan_on_start
+        _app_qconfig.auto_sync.value = self._config.auto_sync_on_start
+        _app_qconfig.auto_backup.value = self._config.auto_backup_on_start
+        _app_qconfig.auto_backup_interval.value = self._config.auto_backup_interval_minutes
 
     # ------------------------------------------------------------------
     # Handlers
