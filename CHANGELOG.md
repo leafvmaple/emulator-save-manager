@@ -1,3 +1,15 @@
+# v0.5.0
+
+Released on 2026-06-16
+
+## ✨ Features
+
+- feat: auto-backup with change detection (Stage 3) (`971b911`)
+- feat(plugins): add RetroArch plugin (Stage 3) (`86879cc`)
+- feat(restore): selective restore — pick which saves to restore (Stage 3) (`b94c9ab`)
+
+---
+
 # v0.4.0
 
 Released on 2026-06-16
