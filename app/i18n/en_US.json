@@ -111,6 +111,15 @@
         "resolving": "Resolving conflicts…",
         "resolved": "Conflicts resolved"
     },
+    "compare": {
+        "title": "Compare Versions",
+        "tooltip": "Compare with previous version",
+        "no_changes": "The two versions are identical",
+        "summary": "{added} added, {modified} modified, {removed} removed",
+        "added": "Added",
+        "removed": "Removed",
+        "modified": "Modified"
+    },
     "settings": {
         "title": "Settings",
         "description": "Customize appearance, backup and sync options",

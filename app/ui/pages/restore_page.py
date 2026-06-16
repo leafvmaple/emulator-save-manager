@@ -188,6 +188,92 @@ class _RestoreSelectDialog(MessageBoxBase):
         return {idx for idx, cb in self._checks if cb.isChecked()}
 
 
+class _DiffDialog(MessageBoxBase):
+    """Read-only view of what changed between two backups."""
+
+    _STATUS_COLOR = {
+        "added": "#107c10",
+        "removed": "#c42b1c",
+        "modified": "#ff8c00",
+    }
+
+    def __init__(self, diff, parent: QWidget | None = None) -> None:  # noqa: ANN001
+        super().__init__(parent)
+        self.titleLabel = SubtitleLabel(t("compare.title"), self)
+        self.viewLayout.addWidget(self.titleLabel)
+
+        sub = CaptionLabel(
+            f"v{diff.old.version} {diff.old.display_time}  →  "
+            f"v{diff.new.version} {diff.new.display_time}",
+            self,
+        )
+        sub.setStyleSheet("color:#888;")
+        self.viewLayout.addWidget(sub)
+
+        if not diff.has_changes:
+            self.viewLayout.addWidget(BodyLabel(t("compare.no_changes"), self))
+        else:
+            self.viewLayout.addWidget(BodyLabel(
+                t("compare.summary",
+                  added=str(len(diff.added)),
+                  modified=str(len(diff.modified)),
+                  removed=str(len(diff.removed))),
+                self,
+            ))
+            self.viewLayout.addWidget(self._build_file_list(diff))
+
+        self.yesButton.setText(t("common.close"))
+        self.cancelButton.hide()
+        self.widget.setMinimumWidth(480)
+
+    def _build_file_list(self, diff) -> QWidget:  # noqa: ANN001
+        inner = QWidget(self)
+        box = QVBoxLayout(inner)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(4)
+        for f in diff.changed:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+
+            badge = QLabel(t(f"compare.{f.status}"))
+            badge.setFixedHeight(18)
+            setFont(badge, 10)
+            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            color = self._STATUS_COLOR.get(f.status, "#888")
+            badge.setStyleSheet(
+                f"background:{color}; color:white; border-radius:9px; padding:0 8px;"
+            )
+            row.addWidget(badge)
+
+            name = CaptionLabel(f.name)
+            name.setStyleSheet("color:#000000;")
+            row.addWidget(name)
+            row.addStretch()
+            row.addWidget(CaptionLabel(self._size_text(f)))
+
+            holder = QWidget()
+            holder.setLayout(row)
+            box.addWidget(holder)
+        box.addStretch()
+
+        scroll = SmoothScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(inner)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setMaximumHeight(300)
+        return scroll
+
+    @staticmethod
+    def _size_text(f) -> str:  # noqa: ANN001
+        def fmt(n):
+            return "-" if n is None else _format_size(n)
+        if f.status == "modified":
+            return f"{fmt(f.size_old)} → {fmt(f.size_new)}"
+        if f.status == "added":
+            return fmt(f.size_new)
+        return fmt(f.size_old)
+
+
 # -----------------------------------------------------------------------
 # Version sub-card
 # -----------------------------------------------------------------------
@@ -199,10 +285,17 @@ class _VersionCard(SimpleCardWidget):
     pin_clicked = Signal(object)      # emits BackupRecord
     label_clicked = Signal(object)    # emits BackupRecord
     delete_clicked = Signal(object)   # emits BackupRecord
+    compare_clicked = Signal(object, object)  # emits (new_record, old_record)
 
-    def __init__(self, record: BackupRecord, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        record: BackupRecord,
+        prev_record: BackupRecord | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.record = record
+        self._prev_record = prev_record
         self.setFixedHeight(56)
 
         root = QHBoxLayout(self)
@@ -257,6 +350,16 @@ class _VersionCard(SimpleCardWidget):
         restore_btn.clicked.connect(lambda: self.restore_clicked.emit(self.record))
         root.addWidget(restore_btn)
 
+        # Compare with the previous (older) version, if there is one.
+        if prev_record is not None:
+            cmp_btn = TransparentToolButton(FIF.SEARCH_MIRROR, self)
+            cmp_btn.setFixedSize(28, 28)
+            cmp_btn.setToolTip(t("compare.tooltip"))
+            cmp_btn.clicked.connect(
+                lambda: self.compare_clicked.emit(self.record, self._prev_record)
+            )
+            root.addWidget(cmp_btn)
+
         # Management actions: pin / label / delete
         pin_btn = TransparentToolButton(
             FIF.UNPIN if record.is_pinned else FIF.PIN, self
@@ -291,6 +394,7 @@ class _GameBackupCard(CardWidget):
     pin_requested = Signal(object)
     label_requested = Signal(object)
     delete_requested = Signal(object)
+    compare_requested = Signal(object, object)  # emits (new_record, old_record)
     ICON_WIDTH = 42
     ICON_MAX_HEIGHT = 58
 
@@ -404,12 +508,15 @@ class _GameBackupCard(CardWidget):
         body_layout.setContentsMargins(0, 4, 0, 4)
         body_layout.setSpacing(6)
 
-        for r in records:
-            vc = _VersionCard(r, self._body)
+        for idx, r in enumerate(records):
+            # records are newest-first, so the next entry is the older version.
+            prev = records[idx + 1] if idx + 1 < len(records) else None
+            vc = _VersionCard(r, prev_record=prev, parent=self._body)
             vc.restore_clicked.connect(self.restore_requested.emit)
             vc.pin_clicked.connect(self.pin_requested.emit)
             vc.label_clicked.connect(self.label_requested.emit)
             vc.delete_clicked.connect(self.delete_requested.emit)
+            vc.compare_clicked.connect(self.compare_requested.emit)
             body_layout.addWidget(vc)
             self._version_cards.append(vc)
 
@@ -564,6 +671,7 @@ class RestorePage(QWidget):
             card.pin_requested.connect(self._on_pin)
             card.label_requested.connect(self._on_label)
             card.delete_requested.connect(self._on_delete)
+            card.compare_requested.connect(self._on_compare)
             self._card_layout.insertWidget(self._card_layout.count() - 1, card)
             self._cards.append(card)
 
@@ -685,3 +793,8 @@ class RestorePage(QWidget):
             parent=self, position=InfoBarPosition.TOP, duration=2500,
         )
         self._refresh_backups()
+
+    def _on_compare(self, new_record: BackupRecord, old_record: BackupRecord) -> None:
+        from app.core.backup_diff import diff_backups
+        diff = diff_backups(old_record, new_record)
+        _DiffDialog(diff, self).exec()

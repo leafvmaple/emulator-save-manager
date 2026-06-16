@@ -111,6 +111,15 @@
         "resolving": "正在处理冲突…",
         "resolved": "冲突已处理"
     },
+    "compare": {
+        "title": "版本对比",
+        "tooltip": "与上一个版本对比",
+        "no_changes": "两个版本内容相同",
+        "summary": "新增 {added}，修改 {modified}，删除 {removed}",
+        "added": "新增",
+        "removed": "删除",
+        "modified": "修改"
+    },
     "settings": {
         "title": "设置",
         "description": "自定义应用外观、备份和同步选项",

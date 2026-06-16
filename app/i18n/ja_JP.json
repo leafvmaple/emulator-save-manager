@@ -111,6 +111,15 @@
         "resolving": "競合を解決しています…",
         "resolved": "競合を解決しました"
     },
+    "compare": {
+        "title": "バージョン比較",
+        "tooltip": "前のバージョンと比較",
+        "no_changes": "2つのバージョンは同一です",
+        "summary": "追加 {added}、変更 {modified}、削除 {removed}",
+        "added": "追加",
+        "removed": "削除",
+        "modified": "変更"
+    },
     "settings": {
         "title": "設定",
         "description": "外観、バックアップ、同期オプションをカスタマイズ",

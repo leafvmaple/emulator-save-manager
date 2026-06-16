@@ -158,3 +158,24 @@ def test_restore_select_dialog_builds(qtbot, cfg):
 
     # All items checked by default.
     assert dlg.selected_indices == {0, 1}
+
+
+def test_diff_dialog_builds(qtbot, cfg, make_game_save, tmp_path):
+    from PySide6.QtWidgets import QWidget
+    from app.core.backup import BackupManager
+    from app.core.backup_diff import diff_backups
+    from app.ui.pages.restore_page import _DiffDialog
+
+    root = tmp_path / "s"
+    bm = BackupManager(cfg)
+    rec1 = bm.create_backup([make_game_save(root, files={"a.bin": b"AAA"})])
+    rec2 = bm.create_backup([make_game_save(root, files={"a.bin": b"AAA-CHANGED", "b.bin": b"B"})])
+    diff = diff_backups(rec1, rec2)
+    assert diff.has_changes
+
+    parent = QWidget()
+    parent.resize(600, 400)
+    qtbot.addWidget(parent)
+    dlg = _DiffDialog(diff, parent)
+    qtbot.addWidget(dlg)
+    assert dlg.titleLabel.text() and "." not in dlg.titleLabel.text()
