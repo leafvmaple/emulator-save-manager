@@ -1,3 +1,13 @@
+# v0.7.0
+
+Released on 2026-06-16
+
+## ✨ Features
+
+- feat: save-state thumbnails — Phase 1 (PCSX2 + RetroArch, scan page) (`e2a1aeb`)
+
+---
+
 # v0.6.0
 
 Released on 2026-06-16
