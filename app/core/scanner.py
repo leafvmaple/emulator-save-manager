@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
 from loguru import logger
 
@@ -33,10 +34,20 @@ class Scanner:
     def scanned_saves(self) -> list[GameSave]:
         return list(self._scanned_saves)
 
-    def detect_all_emulators(self) -> list[EmulatorInfo]:
-        """Run detection across all registered plugins."""
+    def detect_all_emulators(
+        self,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> list[EmulatorInfo]:
+        """Run detection across all registered plugins.
+
+        *should_cancel* is polled between plugins; when it returns True the
+        scan stops early and returns whatever was found so far.
+        """
         self._detected_emulators.clear()
         for plugin in self._pm.get_all_plugins():
+            if should_cancel and should_cancel():
+                logger.info("Detection cancelled")
+                break
             try:
                 logger.info("Detecting {}…", plugin.display_name)
                 extra = [
@@ -51,10 +62,16 @@ class Scanner:
         logger.info("Total emulators detected: {}", len(self._detected_emulators))
         return self.detected_emulators
 
-    def scan_all_saves(self) -> list[GameSave]:
+    def scan_all_saves(
+        self,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> list[GameSave]:
         """Scan saves for all detected emulators."""
         self._scanned_saves.clear()
         for emu_info in self._detected_emulators:
+            if should_cancel and should_cancel():
+                logger.info("Save scan cancelled")
+                break
             plugin = self._pm.get_plugin(emu_info.name)
             if plugin is None:
                 continue
@@ -75,8 +92,13 @@ class Scanner:
         logger.info("Total game saves found: {}", len(self._scanned_saves))
         return self.scanned_saves
 
-    def full_scan(self) -> tuple[list[EmulatorInfo], list[GameSave]]:
-        """Run detection + scanning in one call."""
-        emulators = self.detect_all_emulators()
-        saves = self.scan_all_saves()
+    def full_scan(
+        self,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> tuple[list[EmulatorInfo], list[GameSave]]:
+        """Run detection + scanning in one call (cancellable between phases)."""
+        emulators = self.detect_all_emulators(should_cancel)
+        if should_cancel and should_cancel():
+            return emulators, []
+        saves = self.scan_all_saves(should_cancel)
         return emulators, saves

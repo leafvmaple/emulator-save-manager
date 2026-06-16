@@ -64,7 +64,11 @@
         "restore_fail": "还原失败: {error}",
         "preview": "预览变更",
         "confirm_restore": "确认还原",
-        "overwrite_warning": "本地存档比备份更新，确定要覆盖吗？"
+        "overwrite_warning": "本地存档比备份更新，确定要覆盖吗？",
+        "delete_confirm": "确定删除该备份版本？此操作不可撤销。",
+        "deleted": "备份已删除",
+        "label_title": "设置标签",
+        "label_placeholder": "例如：最终 Boss 前"
     },
     "sync": {
         "title": "多端同步",
@@ -153,6 +157,8 @@
         "info": "提示",
         "success": "成功",
         "loading": "加载中…",
+        "cancelled": "已取消",
+        "canceling": "正在取消…",
         "no_data": "暂无数据",
         "search": "搜索",
         "bytes": "字节",

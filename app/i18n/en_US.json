@@ -64,7 +64,11 @@
         "restore_fail": "Restore failed: {error}",
         "preview": "Preview Changes",
         "confirm_restore": "Confirm Restore",
-        "overwrite_warning": "Local save is newer than backup. Overwrite anyway?"
+        "overwrite_warning": "Local save is newer than backup. Overwrite anyway?",
+        "delete_confirm": "Delete this backup version? This cannot be undone.",
+        "deleted": "Backup deleted",
+        "label_title": "Set Label",
+        "label_placeholder": "e.g. Before final boss"
     },
     "sync": {
         "title": "Multi-Device Sync",
@@ -153,6 +157,8 @@
         "info": "Info",
         "success": "Success",
         "loading": "Loading…",
+        "cancelled": "Cancelled",
+        "canceling": "Cancelling…",
         "no_data": "No data",
         "search": "Search",
         "bytes": "bytes",

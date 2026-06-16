@@ -252,6 +252,11 @@ class BackupManager:
         self._update_meta(record.backup_path, is_pinned=False)
         record.is_pinned = False
 
+    def set_label(self, record: BackupRecord, label: str) -> None:
+        """Set/replace a backup's user label (pin state untouched)."""
+        self._update_meta(record.backup_path, label=label)
+        record.label = label
+
     def delete_backup(self, record: BackupRecord) -> None:
         """Delete a specific backup (zip + sidecar json)."""
         zp = record.backup_path

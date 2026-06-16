@@ -64,7 +64,11 @@
         "restore_fail": "復元失敗: {error}",
         "preview": "変更プレビュー",
         "confirm_restore": "復元を確認",
-        "overwrite_warning": "ローカルのセーブがバックアップより新しいです。上書きしますか？"
+        "overwrite_warning": "ローカルのセーブがバックアップより新しいです。上書きしますか？",
+        "delete_confirm": "このバックアップを削除しますか？この操作は取り消せません。",
+        "deleted": "バックアップを削除しました",
+        "label_title": "ラベルを設定",
+        "label_placeholder": "例：ラスボス前"
     },
     "sync": {
         "title": "マルチデバイス同期",
@@ -153,6 +157,8 @@
         "info": "情報",
         "success": "成功",
         "loading": "読み込み中…",
+        "cancelled": "キャンセルしました",
+        "canceling": "キャンセル中…",
         "no_data": "データなし",
         "search": "検索",
         "bytes": "バイト",

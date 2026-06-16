@@ -58,6 +58,8 @@ class _BackupWorker(QThread):
             groups.setdefault(key, []).append(save)
         total = len(groups)
         for i, (key, saves) in enumerate(groups.items(), start=1):
+            if self.isInterruptionRequested():
+                break
             try:
                 self._backup_manager.create_backup(saves)
                 success += 1
@@ -311,6 +313,12 @@ class BackupPage(QWidget):
         self._backup_btn.clicked.connect(self._on_backup)
         action_bar.addWidget(self._backup_btn)
 
+        self._cancel_btn = PushButton(FIF.CLOSE, t("common.cancel"), self)
+        self._cancel_btn.setFixedWidth(100)
+        self._cancel_btn.clicked.connect(self._on_cancel)
+        self._cancel_btn.hide()
+        action_bar.addWidget(self._cancel_btn)
+
         page_layout.addLayout(action_bar)
 
         # Scrollable card area
@@ -409,6 +417,8 @@ class BackupPage(QWidget):
 
         self._backup_btn.setEnabled(False)
         self._backup_btn.setText(t("backup.backing_up"))
+        self._cancel_btn.setEnabled(True)
+        self._cancel_btn.show()
         self._progress.show()
 
         self._worker = _BackupWorker(self)
@@ -417,16 +427,30 @@ class BackupPage(QWidget):
         self._worker.finished.connect(self._on_backup_finished)
         self._worker.start()
 
+    def _on_cancel(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.requestInterruption()
+            self._cancel_btn.setEnabled(False)
+            self._status_label.setText(t("common.canceling"))
+
     def _on_backup_progress(self, current: int, total: int) -> None:
         self._status_label.setText(f"{current}/{total}")
 
     def _on_backup_finished(self, success: int, errors: list) -> None:
+        cancelled = self._worker is not None and self._worker.isInterruptionRequested()
         self._backup_btn.setEnabled(True)
         self._backup_btn.setText(t("backup.backup_selected"))
+        self._cancel_btn.hide()
         self._progress.hide()
         self._status_label.setText("")
 
-        if errors:
+        if cancelled:
+            InfoBar.warning(
+                title=t("common.cancelled"),
+                content=t("backup.backup_success", count=str(success)),
+                parent=self, position=InfoBarPosition.TOP, duration=3000,
+            )
+        elif errors:
             InfoBar.warning(
                 title=t("backup.backup_complete"),
                 content=t("backup.backup_success", count=str(success))

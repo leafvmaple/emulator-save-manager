@@ -11,6 +11,7 @@ import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 from loguru import logger
 
@@ -219,8 +220,12 @@ class SyncManager:
     # Full sync
     # ------------------------------------------------------------------
 
-    def push_all(self) -> SyncResult:
-        """Push every local backup to the sync folder."""
+    def push_all(self, should_cancel: Callable[[], bool] | None = None) -> SyncResult:
+        """Push every local backup to the sync folder.
+
+        *should_cancel* is polled between games; when it returns True the
+        operation stops early with whatever was pushed so far.
+        """
         result = SyncResult()
         if not self.is_configured:
             result.errors.append("Sync folder not configured")
@@ -228,6 +233,9 @@ class SyncManager:
 
         all_local = self._bm.list_all_backups()
         for key in all_local:
+            if should_cancel and should_cancel():
+                logger.info("Push cancelled")
+                break
             emulator, game_id = key.split(":", 1)
             r = self.push(emulator, game_id)
             result.pushed += r.pushed
@@ -241,7 +249,7 @@ class SyncManager:
         )
         return result
 
-    def pull_all(self) -> SyncResult:
+    def pull_all(self, should_cancel: Callable[[], bool] | None = None) -> SyncResult:
         """Pull every remote backup from the sync folder."""
         result = SyncResult()
         if not self.is_configured:
@@ -253,6 +261,9 @@ class SyncManager:
                 if not emu_dir.is_dir():
                     continue
                 for game_dir in emu_dir.iterdir():
+                    if should_cancel and should_cancel():
+                        logger.info("Pull cancelled")
+                        return result
                     if not game_dir.is_dir():
                         continue
                     # Only pull if the remote dir contains zip files
@@ -270,15 +281,15 @@ class SyncManager:
         )
         return result
 
-    def sync_all(self) -> SyncResult:
+    def sync_all(self, should_cancel: Callable[[], bool] | None = None) -> SyncResult:
         """Perform a full bidirectional sync for all known backups."""
         result = SyncResult()
         if not self.is_configured:
             result.errors.append("Sync folder not configured")
             return result
 
-        push_result = self.push_all()
-        pull_result = self.pull_all()
+        push_result = self.push_all(should_cancel)
+        pull_result = self.pull_all(should_cancel)
 
         result.pushed = push_result.pushed
         result.pulled = pull_result.pulled

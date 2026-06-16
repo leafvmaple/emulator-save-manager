@@ -1,6 +1,7 @@
 """Application configuration management."""
 
 import json
+import os
 import platform
 import uuid
 from pathlib import Path
@@ -160,12 +161,26 @@ class Config:
             self._save()
 
     def _save(self) -> None:
+        """Persist the config atomically.
+
+        Writes to a sibling temp file and ``os.replace``s it into place, so a
+        crash mid-write can never leave a truncated / corrupt config behind.
+        """
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._path.with_name(self._path.name + ".tmp")
         try:
-            with open(self._path, "w", encoding="utf-8") as f:
+            with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(self._data, f, indent=4, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self._path)
         except Exception as e:
             logger.error("Failed to save config: {}", e)
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except OSError:
+                pass
 
     @classmethod
     def reset(cls) -> None:

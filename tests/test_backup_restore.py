@@ -91,3 +91,71 @@ def test_rotation_keeps_newest_max_backups(cfg, tmp_path):
     assert {r.backup_path.stem for r in remaining} == {
         "2020-01-03_00-00", "2020-01-04_00-00"
     }
+
+
+def _seed_backups(bm, stamps):
+    game_dir = bm.backup_root / "PCSX2" / "SLUS-MGMT"
+    game_dir.mkdir(parents=True, exist_ok=True)
+    import zipfile
+    for i, ts in enumerate(stamps):
+        with zipfile.ZipFile(game_dir / f"{ts}.zip", "w") as zf:
+            zf.writestr("savestate/x.bin", bytes([i]))
+        (game_dir / f"{ts}.json").write_text(
+            json.dumps({"title": "g", "game_id": "SLUS-MGMT",
+                        "emulator": "PCSX2", "backup_paths": []}),
+            encoding="utf-8",
+        )
+    return game_dir
+
+
+def test_pin_and_unpin(cfg):
+    bm = BackupManager(cfg)
+    _seed_backups(bm, ["2020-01-01_00-00"])
+    rec = bm.list_backups("PCSX2", "SLUS-MGMT")[0]
+    assert rec.is_pinned is False
+
+    bm.pin_backup(rec, label="boss fight")
+    refreshed = bm.list_backups("PCSX2", "SLUS-MGMT")[0]
+    assert refreshed.is_pinned is True
+    assert refreshed.label == "boss fight"
+
+    bm.unpin_backup(refreshed)
+    assert bm.list_backups("PCSX2", "SLUS-MGMT")[0].is_pinned is False
+
+
+def test_set_label_persists(cfg):
+    bm = BackupManager(cfg)
+    _seed_backups(bm, ["2020-01-01_00-00"])
+    rec = bm.list_backups("PCSX2", "SLUS-MGMT")[0]
+
+    bm.set_label(rec, "speedrun PB")
+    assert rec.label == "speedrun PB"
+    assert bm.list_backups("PCSX2", "SLUS-MGMT")[0].label == "speedrun PB"
+
+
+def test_delete_backup_removes_pair(cfg):
+    bm = BackupManager(cfg)
+    _seed_backups(bm, ["2020-01-01_00-00"])
+    rec = bm.list_backups("PCSX2", "SLUS-MGMT")[0]
+
+    bm.delete_backup(rec)
+    assert not rec.backup_path.exists()
+    assert not rec.backup_path.with_suffix(".json").exists()
+    assert bm.list_backups("PCSX2", "SLUS-MGMT") == []
+
+
+def test_rotation_keeps_pinned(cfg):
+    bm = BackupManager(cfg)
+    _seed_backups(bm, ["2020-01-01_00-00", "2020-01-02_00-00",
+                       "2020-01-03_00-00", "2020-01-04_00-00"])
+    # Pin the oldest — it must survive rotation even past the limit.
+    oldest = bm.list_backups("PCSX2", "SLUS-MGMT")[-1]
+    assert oldest.backup_path.stem == "2020-01-01_00-00"
+    bm.pin_backup(oldest)
+
+    cfg.set("max_backups", 1)
+    bm.rotate_backups("PCSX2", "SLUS-MGMT")
+
+    stems = {r.backup_path.stem for r in bm.list_backups("PCSX2", "SLUS-MGMT")}
+    assert "2020-01-01_00-00" in stems  # pinned kept
+    assert "2020-01-04_00-00" in stems  # newest (within limit) kept

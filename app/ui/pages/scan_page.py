@@ -53,7 +53,9 @@ class _ScanWorker(QThread):
 
     def run(self) -> None:
         try:
-            emulators, saves = self._scanner.full_scan()
+            emulators, saves = self._scanner.full_scan(
+                should_cancel=self.isInterruptionRequested,
+            )
             self.finished.emit(emulators, saves)
         except Exception as e:
             self.error.emit(str(e))
@@ -516,6 +518,12 @@ class ScanPage(QWidget):
         self._scan_btn.clicked.connect(self._on_scan)
         action_bar.addWidget(self._scan_btn)
 
+        self._cancel_btn = PushButton(FIF.CLOSE, t("common.cancel"), self)
+        self._cancel_btn.setFixedWidth(100)
+        self._cancel_btn.clicked.connect(self._on_cancel)
+        self._cancel_btn.hide()
+        action_bar.addWidget(self._cancel_btn)
+
         page.addLayout(action_bar)
 
         # Emulator cards row (horizontally scrollable)
@@ -578,6 +586,8 @@ class ScanPage(QWidget):
 
         self._scan_btn.setEnabled(False)
         self._scan_btn.setText(t("scan.scanning"))
+        self._cancel_btn.setEnabled(True)
+        self._cancel_btn.show()
         self.setFocus()  # prevent focus jumping to search bar
         self._progress.show()
         self._status_label.setText(t("scan.scanning"))
@@ -588,15 +598,26 @@ class ScanPage(QWidget):
         self._worker.error.connect(self._on_scan_error)
         self._worker.start()
 
+    def _on_cancel(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.requestInterruption()
+            self._cancel_btn.setEnabled(False)
+            self._status_label.setText(t("common.canceling"))
+
     def _on_scan_finished(self, emulators: list, saves: list) -> None:
+        cancelled = self._worker is not None and self._worker.isInterruptionRequested()
         self._emulators = emulators
         self._saves = saves
         self._scan_btn.setEnabled(True)
         self._scan_btn.setText(t("scan.start_scan"))
+        self._cancel_btn.hide()
         self._progress.hide()
-        self._status_label.setText(
-            f"{t('scan.found_emulators', count=str(len(emulators)))}"
-        )
+        if cancelled:
+            self._status_label.setText(t("common.cancelled"))
+        else:
+            self._status_label.setText(
+                f"{t('scan.found_emulators', count=str(len(emulators)))}"
+            )
         # Register emulator data paths for icon look-up
         if self._icon_provider:
             for emu in emulators:
@@ -622,15 +643,23 @@ class ScanPage(QWidget):
         self._start_icon_download()
         self.saves_updated.emit(saves)
 
-        InfoBar.success(
-            title=t("scan.scan_complete"),
-            content=t("scan.found_saves", count=str(len(saves))),
-            parent=self, position=InfoBarPosition.TOP, duration=3000,
-        )
+        if cancelled:
+            InfoBar.warning(
+                title=t("common.cancelled"),
+                content=t("scan.found_saves", count=str(len(saves))),
+                parent=self, position=InfoBarPosition.TOP, duration=3000,
+            )
+        else:
+            InfoBar.success(
+                title=t("scan.scan_complete"),
+                content=t("scan.found_saves", count=str(len(saves))),
+                parent=self, position=InfoBarPosition.TOP, duration=3000,
+            )
 
     def _on_scan_error(self, error: str) -> None:
         self._scan_btn.setEnabled(True)
         self._scan_btn.setText(t("scan.start_scan"))
+        self._cancel_btn.hide()
         self._progress.hide()
         self._status_label.setText("")
         InfoBar.error(

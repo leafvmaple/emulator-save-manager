@@ -36,12 +36,13 @@ class _SyncWorker(QThread):
 
     def run(self) -> None:
         try:
+            cancel = self.isInterruptionRequested
             if self._mode == "push":
-                result = self._sync_manager.push_all()
+                result = self._sync_manager.push_all(should_cancel=cancel)
             elif self._mode == "pull":
-                result = self._sync_manager.pull_all()
+                result = self._sync_manager.pull_all(should_cancel=cancel)
             else:
-                result = self._sync_manager.sync_all()
+                result = self._sync_manager.sync_all(should_cancel=cancel)
             self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))
@@ -143,6 +144,12 @@ class SyncPage(QWidget):
         self._pull_btn.clicked.connect(self._on_pull)
         action_bar.addWidget(self._pull_btn)
 
+        self._cancel_btn = PushButton(FIF.CLOSE, t("common.cancel"), self)
+        self._cancel_btn.setFixedWidth(100)
+        self._cancel_btn.clicked.connect(self._on_cancel)
+        self._cancel_btn.hide()
+        action_bar.addWidget(self._cancel_btn)
+
         self._progress = ProgressRing(self)
         self._progress.setFixedSize(24, 24)
         self._progress.hide()
@@ -215,6 +222,8 @@ class SyncPage(QWidget):
         self._sync_btn.setEnabled(False)
         self._push_btn.setEnabled(False)
         self._pull_btn.setEnabled(False)
+        self._cancel_btn.setEnabled(True)
+        self._cancel_btn.show()
         self._progress.show()
         self._status_msg.setText(t("sync.syncing"))
 
@@ -224,11 +233,29 @@ class SyncPage(QWidget):
         self._worker.error.connect(self._on_sync_error)
         self._worker.start()
 
+    def _on_cancel(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.requestInterruption()
+            self._cancel_btn.setEnabled(False)
+            self._status_msg.setText(t("common.canceling"))
+
     def _on_sync_finished(self, result: SyncResult) -> None:
+        cancelled = self._worker is not None and self._worker.isInterruptionRequested()
         self._sync_btn.setEnabled(True)
         self._push_btn.setEnabled(True)
         self._pull_btn.setEnabled(True)
+        self._cancel_btn.hide()
         self._progress.hide()
+
+        if cancelled:
+            self._status_msg.setText(t("common.cancelled"))
+            InfoBar.warning(
+                title=t("common.cancelled"),
+                content=t("sync.sync_success", push=str(result.pushed),
+                          pull=str(result.pulled)),
+                parent=self, position=InfoBarPosition.TOP, duration=3000,
+            )
+            return
 
         msg = t("sync.sync_success", push=str(result.pushed), pull=str(result.pulled))
         self._status_msg.setText(msg)
@@ -327,6 +354,7 @@ class SyncPage(QWidget):
         self._sync_btn.setEnabled(True)
         self._push_btn.setEnabled(True)
         self._pull_btn.setEnabled(True)
+        self._cancel_btn.hide()
         self._progress.hide()
         self._status_msg.setText("")
         InfoBar.error(

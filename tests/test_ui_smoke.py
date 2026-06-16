@@ -66,3 +66,43 @@ def test_conflict_dialogs_build(qtbot, cfg):
 
     # i18n keys resolve to real strings, not the raw dotted key.
     assert single.titleLabel.text() and "." not in single.titleLabel.text()
+
+
+def test_cancel_buttons_present(qtbot, cfg):
+    """Each long-running page exposes a (hidden) cancel button."""
+    from app.ui.pages.scan_page import ScanPage
+    from app.ui.pages.backup_page import BackupPage
+    from app.ui.pages.sync_page import SyncPage
+
+    for page_cls in (ScanPage, BackupPage, SyncPage):
+        page = page_cls()
+        qtbot.addWidget(page)
+        assert hasattr(page, "_cancel_btn")
+        assert page._cancel_btn.isHidden()
+
+
+def test_backup_management_card_and_dialog(qtbot, cfg, tmp_path):
+    from datetime import datetime
+    from app.ui.pages.restore_page import _GameBackupCard, _LabelDialog
+    from app.models.backup_record import BackupRecord
+    from app.models.game_save import GameSave
+
+    rec = BackupRecord(
+        game_save=GameSave(emulator="PCSX2", game_name="Game", game_id="SLUS-1"),
+        backup_time=datetime.now(),
+        backup_path=tmp_path / "2020-01-01_00-00.zip",
+        version=1,
+    )
+    card = _GameBackupCard("Game", "PCSX2", "SLUS-1", [rec])
+    qtbot.addWidget(card)
+    # Management signals are forwarded by the card.
+    for sig in ("restore_requested", "pin_requested", "label_requested", "delete_requested"):
+        assert hasattr(card, sig)
+
+    from PySide6.QtWidgets import QWidget
+    parent = QWidget()
+    parent.resize(400, 200)
+    qtbot.addWidget(parent)
+    dlg = _LabelDialog("before boss", parent)
+    qtbot.addWidget(dlg)
+    assert dlg.label_text == "before boss"

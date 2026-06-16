@@ -23,7 +23,7 @@ from qfluentwidgets import (
     PrimaryPushButton, PushButton, TransparentToolButton,
     CardWidget, SimpleCardWidget, SmoothScrollArea,
     FluentIcon as FIF, InfoBar, InfoBarPosition, InfoBadge,
-    MessageBox, ProgressRing, IconWidget,
+    MessageBox, MessageBoxBase, LineEdit, ProgressRing, IconWidget,
     setFont,
 )
 from loguru import logger
@@ -113,6 +113,31 @@ class _TypeBadge(QLabel):
 
 
 # -----------------------------------------------------------------------
+# Label editor dialog
+# -----------------------------------------------------------------------
+
+class _LabelDialog(MessageBoxBase):
+    """Small dialog to set/edit a backup's label."""
+
+    def __init__(self, current: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.titleLabel = SubtitleLabel(t("restore.label_title"), self)
+        self.edit = LineEdit(self)
+        self.edit.setText(current)
+        self.edit.setPlaceholderText(t("restore.label_placeholder"))
+        self.edit.setClearButtonEnabled(True)
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(self.edit)
+        self.yesButton.setText(t("common.confirm"))
+        self.cancelButton.setText(t("common.cancel"))
+        self.widget.setMinimumWidth(360)
+
+    @property
+    def label_text(self) -> str:
+        return self.edit.text().strip()
+
+
+# -----------------------------------------------------------------------
 # Version sub-card
 # -----------------------------------------------------------------------
 
@@ -120,6 +145,9 @@ class _VersionCard(SimpleCardWidget):
     """A compact card representing a single backup version."""
 
     restore_clicked = Signal(object)  # emits BackupRecord
+    pin_clicked = Signal(object)      # emits BackupRecord
+    label_clicked = Signal(object)    # emits BackupRecord
+    delete_clicked = Signal(object)   # emits BackupRecord
 
     def __init__(self, record: BackupRecord, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -178,6 +206,27 @@ class _VersionCard(SimpleCardWidget):
         restore_btn.clicked.connect(lambda: self.restore_clicked.emit(self.record))
         root.addWidget(restore_btn)
 
+        # Management actions: pin / label / delete
+        pin_btn = TransparentToolButton(
+            FIF.UNPIN if record.is_pinned else FIF.PIN, self
+        )
+        pin_btn.setFixedSize(28, 28)
+        pin_btn.setToolTip(t("backup.unpin") if record.is_pinned else t("backup.pin"))
+        pin_btn.clicked.connect(lambda: self.pin_clicked.emit(self.record))
+        root.addWidget(pin_btn)
+
+        label_btn = TransparentToolButton(FIF.LABEL, self)
+        label_btn.setFixedSize(28, 28)
+        label_btn.setToolTip(t("backup.label"))
+        label_btn.clicked.connect(lambda: self.label_clicked.emit(self.record))
+        root.addWidget(label_btn)
+
+        delete_btn = TransparentToolButton(FIF.DELETE, self)
+        delete_btn.setFixedSize(28, 28)
+        delete_btn.setToolTip(t("common.delete"))
+        delete_btn.clicked.connect(lambda: self.delete_clicked.emit(self.record))
+        root.addWidget(delete_btn)
+
 
 
 # -----------------------------------------------------------------------
@@ -188,6 +237,9 @@ class _GameBackupCard(CardWidget):
     """Expandable card for a game showing its backup history."""
 
     restore_requested = Signal(object)  # emits BackupRecord
+    pin_requested = Signal(object)
+    label_requested = Signal(object)
+    delete_requested = Signal(object)
     ICON_WIDTH = 42
     ICON_MAX_HEIGHT = 58
 
@@ -304,6 +356,9 @@ class _GameBackupCard(CardWidget):
         for r in records:
             vc = _VersionCard(r, self._body)
             vc.restore_clicked.connect(self.restore_requested.emit)
+            vc.pin_clicked.connect(self.pin_requested.emit)
+            vc.label_clicked.connect(self.label_requested.emit)
+            vc.delete_clicked.connect(self.delete_requested.emit)
             body_layout.addWidget(vc)
             self._version_cards.append(vc)
 
@@ -455,6 +510,9 @@ class RestorePage(QWidget):
                 parent=self._scroll_inner,
             )
             card.restore_requested.connect(self._on_restore)
+            card.pin_requested.connect(self._on_pin)
+            card.label_requested.connect(self._on_label)
+            card.delete_requested.connect(self._on_delete)
             self._card_layout.insertWidget(self._card_layout.count() - 1, card)
             self._cards.append(card)
 
@@ -524,3 +582,43 @@ class RestorePage(QWidget):
         """Enable/disable all game cards while a restore runs."""
         for card in self._cards:
             card.setEnabled(enabled)
+
+    # ------------------------------------------------------------------
+    # Backup management
+    # ------------------------------------------------------------------
+
+    def _on_pin(self, record: BackupRecord) -> None:
+        if self._backup_manager is None:
+            return
+        if record.is_pinned:
+            self._backup_manager.unpin_backup(record)
+        else:
+            self._backup_manager.pin_backup(record, label=record.label)
+        self._refresh_backups()
+
+    def _on_label(self, record: BackupRecord) -> None:
+        if self._backup_manager is None:
+            return
+        dlg = _LabelDialog(record.label, self)
+        if not dlg.exec():
+            return
+        self._backup_manager.set_label(record, dlg.label_text)
+        self._refresh_backups()
+
+    def _on_delete(self, record: BackupRecord) -> None:
+        if self._backup_manager is None:
+            return
+        box = MessageBox(
+            t("common.delete"),
+            t("restore.delete_confirm"),
+            self,
+        )
+        if not box.exec():
+            return
+        self._backup_manager.delete_backup(record)
+        InfoBar.success(
+            title=t("restore.restore_complete"),
+            content=t("restore.deleted"),
+            parent=self, position=InfoBarPosition.TOP, duration=2500,
+        )
+        self._refresh_backups()
