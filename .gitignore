@@ -19,3 +19,4 @@ ENV/
 logs/
 *.log
 .pytest_cache/
+RELEASE_NOTES.md
