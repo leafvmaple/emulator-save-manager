@@ -68,7 +68,10 @@
         "delete_confirm": "このバックアップを削除しますか？この操作は取り消せません。",
         "deleted": "バックアップを削除しました",
         "label_title": "ラベルを設定",
-        "label_placeholder": "例：ラスボス前"
+        "label_placeholder": "例：ラスボス前",
+        "select_title": "復元するセーブを選択",
+        "select_desc": "このバックアップから復元する項目を選択してください。",
+        "newer_local": "ローカルが新しい"
     },
     "sync": {
         "title": "マルチデバイス同期",

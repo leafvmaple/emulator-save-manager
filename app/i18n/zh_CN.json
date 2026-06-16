@@ -68,7 +68,10 @@
         "delete_confirm": "确定删除该备份版本？此操作不可撤销。",
         "deleted": "备份已删除",
         "label_title": "设置标签",
-        "label_placeholder": "例如：最终 Boss 前"
+        "label_placeholder": "例如：最终 Boss 前",
+        "select_title": "选择要还原的存档",
+        "select_desc": "勾选要从该备份还原的存档项",
+        "newer_local": "本地更新"
     },
     "sync": {
         "title": "多端同步",

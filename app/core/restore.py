@@ -45,6 +45,38 @@ class FileChange:
     """True if the destination file is newer than the backup."""
 
 
+@dataclass
+class RestoreItem:
+    """One selectable unit of a backup (a save file or a folder save).
+
+    Maps to a single ``backup_paths`` entry in the sidecar metadata, so the
+    user can choose to restore a subset (e.g. one save slot) rather than the
+    whole archive.
+    """
+
+    index: int
+    """Position in the backup's ``backup_paths`` list — used as the selector."""
+
+    save_type: str
+    """Save-type key (``savestate`` / ``memcard`` / ``folder`` / …)."""
+
+    destination: Path
+    """Where this item restores to."""
+
+    is_dir: bool
+    """True if this item is a folder save."""
+
+    dest_exists: bool = False
+    """Whether the destination already exists locally."""
+
+    is_newer_locally: bool = False
+    """True if the local copy is newer than the backup (would lose changes)."""
+
+    @property
+    def name(self) -> str:
+        return self.destination.name
+
+
 def _resolve_emu_data_path(
     info: dict,
     detected_emulators: list | None = None,
@@ -89,11 +121,14 @@ class RestoreManager:
             return emus if emus else None
         return None
 
-    def preview_restore(self, record: BackupRecord) -> list[FileChange]:
+    def preview_restore(
+        self, record: BackupRecord, indices: set[int] | None = None
+    ) -> list[FileChange]:
         """Preview what files will be changed by restoring a backup.
 
         Returns a list of :class:`FileChange` objects without actually
-        writing anything.
+        writing anything.  If *indices* is given, only those ``backup_paths``
+        entries are previewed (selective restore).
         """
         changes: list[FileChange] = []
         zip_path = record.backup_path
@@ -109,7 +144,9 @@ class RestoreManager:
 
         with zipfile.ZipFile(zip_path, "r") as zf:
             names_set = {zi.filename for zi in zf.infolist()}
-            for bp in info.get("backup_paths", []):
+            for i, bp in enumerate(info.get("backup_paths", [])):
+                if indices is not None and i not in indices:
+                    continue
                 source_path = resolve_path(bp["source"], emu_data_path)
                 is_dir = bp.get("is_dir", False)
                 zip_prefix = bp.get("zip_path", "")
@@ -127,7 +164,58 @@ class RestoreManager:
 
         return changes
 
-    def restore_backup(self, record: BackupRecord, force: bool = False) -> list[str]:
+    def list_backup_items(self, record: BackupRecord) -> list[RestoreItem]:
+        """Enumerate the individually-restorable items in a backup.
+
+        Each item is one ``backup_paths`` entry (a save file or folder save),
+        annotated with whether its destination exists locally and whether the
+        local copy is newer than the backup.
+        """
+        items: list[RestoreItem] = []
+        zip_path = record.backup_path
+        meta_path = zip_path.with_suffix(".json")
+        if not zip_path.exists() or not meta_path.exists():
+            return items
+
+        with open(meta_path, "r", encoding="utf-8") as f:
+            info = json.load(f)
+
+        emu_data_path = _resolve_emu_data_path(info, self._detected_emulators)
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            names = {zi.filename: zi for zi in zf.infolist()}
+            for i, bp in enumerate(info.get("backup_paths", [])):
+                source_path = resolve_path(bp["source"], emu_data_path)
+                is_dir = bp.get("is_dir", False)
+                zip_prefix = bp.get("zip_path", "")
+
+                is_newer = False
+                if is_dir:
+                    for entry in zf.infolist():
+                        if entry.filename.startswith(zip_prefix) and not entry.is_dir():
+                            rel = entry.filename[len(zip_prefix):]
+                            if self._make_change(entry, source_path / rel).is_newer_locally:
+                                is_newer = True
+                                break
+                elif zip_prefix in names:
+                    is_newer = self._make_change(names[zip_prefix], source_path).is_newer_locally
+
+                items.append(RestoreItem(
+                    index=i,
+                    save_type=bp.get("type", ""),
+                    destination=source_path,
+                    is_dir=is_dir,
+                    dest_exists=source_path.exists(),
+                    is_newer_locally=is_newer,
+                ))
+        return items
+
+    def restore_backup(
+        self,
+        record: BackupRecord,
+        force: bool = False,
+        indices: set[int] | None = None,
+    ) -> list[str]:
         """Restore files from a ZIP backup to their original locations.
 
         The operation is all-or-nothing: every destination is snapshotted
@@ -140,6 +228,9 @@ class RestoreManager:
             The backup to restore.
         force : bool
             If True, overwrite even when the local file is newer.
+        indices : set[int], optional
+            If given, only restore those ``backup_paths`` entries (selective
+            restore); otherwise restore the whole backup.
 
         Returns
         -------
@@ -161,9 +252,11 @@ class RestoreManager:
 
         emu_data_path = _resolve_emu_data_path(info, self._detected_emulators)
 
-        # Resolve every destination up front.
+        # Resolve every selected destination up front.
         targets: list[tuple[dict, Path]] = []
-        for bp in info.get("backup_paths", []):
+        for i, bp in enumerate(info.get("backup_paths", [])):
+            if indices is not None and i not in indices:
+                continue
             targets.append((bp, resolve_path(bp["source"], emu_data_path)))
 
         # --- Snapshot phase: copy aside everything we may overwrite ---

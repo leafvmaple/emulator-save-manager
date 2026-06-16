@@ -106,3 +106,25 @@ def test_backup_management_card_and_dialog(qtbot, cfg, tmp_path):
     dlg = _LabelDialog("before boss", parent)
     qtbot.addWidget(dlg)
     assert dlg.label_text == "before boss"
+
+
+def test_restore_select_dialog_builds(qtbot, cfg):
+    from pathlib import Path
+    from PySide6.QtWidgets import QWidget
+    from app.ui.pages.restore_page import _RestoreSelectDialog
+    from app.core.restore import RestoreItem
+
+    items = [
+        RestoreItem(index=0, save_type="savestate", destination=Path("a.p2s"),
+                    is_dir=False, dest_exists=True, is_newer_locally=False),
+        RestoreItem(index=1, save_type="memcard", destination=Path("b.ps2"),
+                    is_dir=False, dest_exists=True, is_newer_locally=True),
+    ]
+    parent = QWidget()
+    parent.resize(500, 400)
+    qtbot.addWidget(parent)
+    dlg = _RestoreSelectDialog(items, parent)
+    qtbot.addWidget(dlg)
+
+    # All items checked by default.
+    assert dlg.selected_indices == {0, 1}

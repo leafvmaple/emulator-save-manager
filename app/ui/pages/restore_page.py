@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import (
     SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
     PrimaryPushButton, PushButton, TransparentToolButton,
-    CardWidget, SimpleCardWidget, SmoothScrollArea,
+    CardWidget, SimpleCardWidget, SmoothScrollArea, CheckBox,
     FluentIcon as FIF, InfoBar, InfoBarPosition, InfoBadge,
     MessageBox, MessageBoxBase, LineEdit, ProgressRing, IconWidget,
     setFont,
@@ -44,14 +44,19 @@ class _RestoreWorker(QThread):
         super().__init__(parent)
         self._manager = None
         self._record: BackupRecord | None = None
+        self._indices: set[int] | None = None
 
-    def set_data(self, manager, record: BackupRecord) -> None:  # noqa: ANN001
+    def set_data(self, manager, record: BackupRecord,  # noqa: ANN001
+                 indices: set[int] | None = None) -> None:
         self._manager = manager
         self._record = record
+        self._indices = indices
 
     def run(self) -> None:
         try:
-            errors = self._manager.restore_backup(self._record, force=True)
+            errors = self._manager.restore_backup(
+                self._record, force=True, indices=self._indices,
+            )
             self.finished.emit(errors)
         except Exception as e:
             self.error.emit(str(e))
@@ -135,6 +140,52 @@ class _LabelDialog(MessageBoxBase):
     @property
     def label_text(self) -> str:
         return self.edit.text().strip()
+
+
+class _RestoreSelectDialog(MessageBoxBase):
+    """Pick which items of a multi-save backup to restore."""
+
+    def __init__(self, items, parent: QWidget | None = None) -> None:  # noqa: ANN001
+        super().__init__(parent)
+        self._checks: list[tuple[int, CheckBox]] = []
+
+        self.titleLabel = SubtitleLabel(t("restore.select_title"), self)
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(BodyLabel(t("restore.select_desc"), self))
+
+        inner = QWidget(self)
+        box = QVBoxLayout(inner)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(6)
+        for it in items:
+            cb = CheckBox(self._item_label(it), inner)
+            cb.setChecked(True)
+            self._checks.append((it.index, cb))
+            box.addWidget(cb)
+        box.addStretch()
+
+        scroll = SmoothScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(inner)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setMaximumHeight(280)
+        self.viewLayout.addWidget(scroll)
+
+        self.yesButton.setText(t("restore.restore_selected"))
+        self.cancelButton.setText(t("common.cancel"))
+        self.widget.setMinimumWidth(440)
+
+    @staticmethod
+    def _item_label(item) -> str:  # noqa: ANN001
+        type_name = t(f"save_type.{item.save_type}") if item.save_type else ""
+        label = f"{item.name}  [{type_name}]" if type_name else item.name
+        if item.is_newer_locally:
+            label += f"   ⚠ {t('restore.newer_local')}"
+        return label
+
+    @property
+    def selected_indices(self) -> set[int]:
+        return {idx for idx, cb in self._checks if cb.isChecked()}
 
 
 # -----------------------------------------------------------------------
@@ -528,8 +579,20 @@ class RestorePage(QWidget):
         if self._restore_worker is not None and self._restore_worker.isRunning():
             return  # a restore is already in progress
 
-        # Preview and confirm
-        changes = self._restore_manager.preview_restore(record)
+        # Selective restore: if the backup holds more than one save, let the
+        # user pick which items to restore (single-item backups restore directly).
+        indices: set[int] | None = None
+        items = self._restore_manager.list_backup_items(record)
+        if len(items) > 1:
+            dlg = _RestoreSelectDialog(items, self)
+            if not dlg.exec():
+                return
+            indices = dlg.selected_indices
+            if not indices:
+                return  # nothing selected
+
+        # Preview and confirm (only the selected items)
+        changes = self._restore_manager.preview_restore(record, indices=indices)
         has_newer = any(c.is_newer_locally for c in changes)
 
         if has_newer:
@@ -546,7 +609,7 @@ class RestorePage(QWidget):
         self._status_label.setText(t("restore.restoring"))
 
         self._restore_worker = _RestoreWorker(self)
-        self._restore_worker.set_data(self._restore_manager, record)
+        self._restore_worker.set_data(self._restore_manager, record, indices)
         self._restore_worker.finished.connect(self._on_restore_finished)
         self._restore_worker.error.connect(self._on_restore_error)
         self._restore_worker.start()

@@ -68,7 +68,10 @@
         "delete_confirm": "Delete this backup version? This cannot be undone.",
         "deleted": "Backup deleted",
         "label_title": "Set Label",
-        "label_placeholder": "e.g. Before final boss"
+        "label_placeholder": "e.g. Before final boss",
+        "select_title": "Select saves to restore",
+        "select_desc": "Check the items to restore from this backup.",
+        "newer_local": "newer locally"
     },
     "sync": {
         "title": "Multi-Device Sync",
