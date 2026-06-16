@@ -1,3 +1,13 @@
+# v0.6.0
+
+Released on 2026-06-16
+
+## ✨ Features
+
+- feat(restore): compare backup versions (Stage 3) (`f0292b0`)
+
+---
+
 # v0.5.0
 
 Released on 2026-06-16
