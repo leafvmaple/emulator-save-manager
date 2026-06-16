@@ -13,7 +13,7 @@ from loguru import logger
 
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
-from app.core.path_resolver import get_documents_dir
+from app.core.path_resolver import get_documents_dir, platform_data_dir_candidates
 from app.plugins.base import EmulatorPlugin
 
 # PS2 memory card constants
@@ -361,48 +361,59 @@ class PCSX2Plugin(EmulatorPlugin):
     ) -> list[EmulatorInfo]:
         """Detect PCSX2 installations by checking common locations."""
         installations: list[EmulatorInfo] = []
-        if platform.system() != "Windows":
-            # TODO: Linux/macOS support
-            return installations
-
         candidates: list[Path] = []
 
-        # 0. User-configured paths
+        # 0. User-configured paths (all platforms)
         if extra_paths:
             for p in extra_paths:
                 if p.exists() and p not in candidates:
                     candidates.append(p)
 
-        # 1. Documents/PCSX2 (default data dir)
+        # Default Documents/PCSX2 data dir (Windows; harmless probe elsewhere)
         docs_path = get_documents_dir() / "PCSX2"
-        if docs_path.exists():
-            candidates.append(docs_path)
+        system = platform.system()
 
-        # 2. Check registry for install path
-        try:
-            import winreg
-            for root_key in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
-                for sub in ("SOFTWARE\\PCSX2", "SOFTWARE\\WOW6432Node\\PCSX2"):
-                    try:
-                        key = winreg.OpenKey(root_key, sub)
-                        install_dir, _ = winreg.QueryValueEx(key, "Install_Dir")
-                        winreg.CloseKey(key)
-                        p = Path(install_dir)
-                        if p.exists() and p not in candidates:
-                            candidates.append(p)
-                    except (FileNotFoundError, OSError):
-                        continue
-        except ImportError:
-            pass
+        if system == "Windows":
+            # 1. Documents/PCSX2 (default data dir)
+            if docs_path.exists():
+                candidates.append(docs_path)
 
-        # 3. Common install locations
-        for prog_dir in [
-            Path("C:/Program Files/PCSX2"),
-            Path("C:/Program Files (x86)/PCSX2"),
-            Path.home() / "scoop" / "apps" / "pcsx2",
-        ]:
-            if prog_dir.exists() and prog_dir not in candidates:
-                candidates.append(prog_dir)
+            # 2. Check registry for install path
+            try:
+                import winreg
+                for root_key in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+                    for sub in ("SOFTWARE\\PCSX2", "SOFTWARE\\WOW6432Node\\PCSX2"):
+                        try:
+                            key = winreg.OpenKey(root_key, sub)
+                            install_dir, _ = winreg.QueryValueEx(key, "Install_Dir")
+                            winreg.CloseKey(key)
+                            p = Path(install_dir)
+                            if p.exists() and p not in candidates:
+                                candidates.append(p)
+                        except (FileNotFoundError, OSError):
+                            continue
+            except ImportError:
+                pass
+
+            # 3. Common install locations
+            for prog_dir in [
+                Path("C:/Program Files/PCSX2"),
+                Path("C:/Program Files (x86)/PCSX2"),
+                Path.home() / "scoop" / "apps" / "pcsx2",
+            ]:
+                if prog_dir.exists() and prog_dir not in candidates:
+                    candidates.append(prog_dir)
+        else:
+            # macOS: ~/Library/Application Support/PCSX2
+            # Linux: ~/.config/PCSX2, ~/.local/share/PCSX2, plus Flatpak
+            probes = platform_data_dir_candidates(
+                macos_names=["PCSX2"], linux_names=["PCSX2"],
+            )
+            probes.append(Path.home() / ".var" / "app"
+                          / "net.pcsx2.PCSX2" / "config" / "PCSX2")
+            for p in probes:
+                if p.exists() and p not in candidates:
+                    candidates.append(p)
 
         # Evaluate candidates
         for candidate in candidates:

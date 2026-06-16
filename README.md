@@ -30,6 +30,24 @@ A cross-platform emulator save manager with multi-device sync. Auto-detects inst
 | Snes9x | Snes9x | SNES | Battery Saves (.srm), Save States |
 | Citra | Citra | Nintendo 3DS | Application Saves, Save States |
 
+## Platform Support
+
+Works on **Windows, macOS and Linux**. Each plugin auto-detects the emulator's
+data directory using that platform's conventional location:
+
+| OS | Auto-detected locations |
+|----|-------------------------|
+| Windows | `Documents\…`, `%APPDATA%\…`, `%LOCALAPPDATA%\…`, registry, portable installs |
+| macOS | `~/Library/Application Support/<Emulator>` |
+| Linux | `~/.config/<emulator>`, `~/.local/share/<emulator>`, Flatpak (`~/.var/app/…`) |
+
+If an emulator lives somewhere non-standard, add its data folder under
+**Settings → Emulator Paths** — user-configured paths are honored on every OS.
+
+> Windows is the primary, most-tested target. macOS/Linux detection uses each
+> emulator's documented config locations; the user-path override is the
+> fallback when a build stores its data elsewhere.
+
 ## Screenshots
 
 > *Coming soon*

@@ -11,6 +11,7 @@ from pathlib import Path
 from loguru import logger
 
 from app.config import _default_data_dir
+from app.core.path_resolver import platform_data_dir_candidates
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
 from app.plugins.base import EmulatorPlugin
@@ -87,51 +88,56 @@ class CitraPlugin(EmulatorPlugin):
     ) -> list[EmulatorInfo]:
         """Detect Citra / Lime3DS installations on this machine."""
         installations: list[EmulatorInfo] = []
-        if platform.system() != "Windows":
-            return installations
-
         candidates: list[Path] = []
+        # Standard config dirs → treated as non-portable installs.
+        managed_roots: list[Path] = []
 
-        # 0. User-configured paths
+        # 0. User-configured paths (all platforms)
         if extra_paths:
             for p in extra_paths:
                 if p.exists() and p not in candidates:
                     candidates.append(p)
 
-        appdata = Path.home() / "AppData" / "Roaming"
+        system = platform.system()
+        if system == "Windows":
+            appdata = Path.home() / "AppData" / "Roaming"
 
-        # 1. Official Citra
-        citra_dir = appdata / "Citra"
-        if citra_dir.exists():
-            candidates.append(citra_dir)
+            # 1-3. Official Citra, Lime3DS, and forks under %APPDATA%
+            for name in ("Citra", "Lime3DS", "citra-emu", "Citra-Enhanced"):
+                d = appdata / name
+                if d.exists() and d not in candidates:
+                    candidates.append(d)
+                    managed_roots.append(d)
 
-        # 2. Lime3DS (Citra fork)
-        lime_dir = appdata / "Lime3DS"
-        if lime_dir.exists():
-            candidates.append(lime_dir)
-
-        # 3. Citra-enhanced / other forks
-        for name in ("citra-emu", "Citra-Enhanced"):
-            fork_dir = appdata / name
-            if fork_dir.exists():
-                candidates.append(fork_dir)
-
-        # 4. Portable mode — look for user/ dir next to executable
-        for prog_path in [
-            Path("C:/Citra"),
-            Path("C:/Program Files/Citra"),
-            Path("C:/Lime3DS"),
-            Path.home() / "scoop" / "apps" / "citra",
-        ]:
-            user_dir = prog_path / "user"
-            if user_dir.exists():
-                candidates.append(user_dir)
+            # 4. Portable mode — look for user/ dir next to executable
+            for prog_path in [
+                Path("C:/Citra"),
+                Path("C:/Program Files/Citra"),
+                Path("C:/Lime3DS"),
+                Path.home() / "scoop" / "apps" / "citra",
+            ]:
+                user_dir = prog_path / "user"
+                if user_dir.exists():
+                    candidates.append(user_dir)
+        else:
+            # macOS: ~/Library/Application Support/{Citra,Lime3DS}
+            # Linux: ~/.local/share/{citra-emu,lime3ds-emu} (+ XDG config), Flatpak
+            probes = platform_data_dir_candidates(
+                macos_names=["Citra", "Lime3DS"],
+                linux_names=["citra-emu", "lime3ds-emu"],
+            )
+            probes.append(Path.home() / ".var" / "app"
+                          / "org.citra_emu.citra" / "data" / "citra-emu")
+            for p in probes:
+                if p.exists() and p not in candidates:
+                    candidates.append(p)
+                    managed_roots.append(p)
 
         for candidate in candidates:
             sdmc_dir = candidate / "sdmc"
             nand_dir = candidate / "nand"
             states_dir = candidate / "states"
-            is_portable = not str(candidate).startswith(str(appdata))
+            is_portable = candidate not in managed_roots
 
             if sdmc_dir.exists() or nand_dir.exists() or states_dir.exists():
                 installations.append(EmulatorInfo(

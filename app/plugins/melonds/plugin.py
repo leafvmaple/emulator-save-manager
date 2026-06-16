@@ -12,6 +12,7 @@ from loguru import logger
 
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
+from app.core.path_resolver import platform_data_dir_candidates
 from app.plugins.base import EmulatorPlugin
 
 # Save-state filename pattern: {romName}.ds{slot}  (e.g. game.ds0, game.ds1 …)
@@ -138,49 +139,59 @@ class MelonDSPlugin(EmulatorPlugin):
     ) -> list[EmulatorInfo]:
         """Detect melonDS installations on this machine."""
         installations: list[EmulatorInfo] = []
-        if platform.system() != "Windows":
-            return installations
-
         candidates: list[Path] = []
+        # Standard config dirs → treated as non-portable installs.
+        managed_roots: list[Path] = []
 
-        # 0. User-configured paths
+        # 0. User-configured paths (all platforms)
         if extra_paths:
             for p in extra_paths:
                 if p.exists() and p not in candidates:
                     candidates.append(p)
 
-        appdata = Path.home() / "AppData" / "Roaming"
-        localappdata = Path.home() / "AppData" / "Local"
+        system = platform.system()
+        if system == "Windows":
+            appdata = Path.home() / "AppData" / "Roaming"
+            localappdata = Path.home() / "AppData" / "Local"
 
-        # 1. Default: %APPDATA%/melonDS  (melonDS 1.0+)
-        melonds_appdata = appdata / "melonDS"
-        if melonds_appdata.exists():
-            candidates.append(melonds_appdata)
+            # 1. Default: %APPDATA%/melonDS  (melonDS 1.0+)
+            melonds_appdata = appdata / "melonDS"
+            if melonds_appdata.exists():
+                candidates.append(melonds_appdata)
+                managed_roots.append(melonds_appdata)
 
-        # 2. %LOCALAPPDATA%/melonDS  (some builds)
-        melonds_local = localappdata / "melonDS"
-        if melonds_local.exists() and melonds_local not in candidates:
-            candidates.append(melonds_local)
+            # 2. %LOCALAPPDATA%/melonDS  (some builds)
+            melonds_local = localappdata / "melonDS"
+            if melonds_local.exists() and melonds_local not in candidates:
+                candidates.append(melonds_local)
+                managed_roots.append(melonds_local)
 
-        # 3. Portable mode — melonDS.ini / melonDS.toml next to executable
-        for prog_path in [
-            Path("C:/melonDS"),
-            Path("C:/Program Files/melonDS"),
-            Path("C:/Program Files (x86)/melonDS"),
-            Path.home() / "scoop" / "apps" / "melonds",
-            Path.home() / "scoop" / "apps" / "melonds" / "current",
-        ]:
-            if prog_path.exists():
-                has_config = any(
-                    (prog_path / cfg).exists() for cfg in _CONFIG_FILENAMES
-                )
-                if has_config:
-                    candidates.append(prog_path)
+            # 3. Portable mode — melonDS.ini / melonDS.toml next to executable
+            for prog_path in [
+                Path("C:/melonDS"),
+                Path("C:/Program Files/melonDS"),
+                Path("C:/Program Files (x86)/melonDS"),
+                Path.home() / "scoop" / "apps" / "melonds",
+                Path.home() / "scoop" / "apps" / "melonds" / "current",
+            ]:
+                if prog_path.exists():
+                    has_config = any(
+                        (prog_path / cfg).exists() for cfg in _CONFIG_FILENAMES
+                    )
+                    if has_config:
+                        candidates.append(prog_path)
+        else:
+            # macOS: ~/Library/Application Support/melonDS
+            # Linux: ~/.config/melonDS, ~/.local/share/melonDS
+            for p in platform_data_dir_candidates(
+                macos_names=["melonDS"], linux_names=["melonDS"],
+            ):
+                if p.exists() and p not in candidates:
+                    candidates.append(p)
+                    managed_roots.append(p)
 
         for candidate in candidates:
-            is_portable = not str(candidate).startswith(str(appdata)) and not str(
-                candidate
-            ).startswith(str(localappdata))
+            is_portable = candidate not in managed_roots
 
             # Check for signs of a valid melonDS data directory
             has_config = any(

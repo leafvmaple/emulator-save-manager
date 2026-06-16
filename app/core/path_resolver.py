@@ -139,6 +139,60 @@ def get_home_dir() -> Path:
     return Path.home()
 
 
+def get_app_support_dir() -> Path:
+    """Return the macOS Application Support dir (``~/Library/Application Support``)."""
+    if "app_support" in _cache:
+        return _cache["app_support"]
+    result = Path.home() / "Library" / "Application Support"
+    _cache["app_support"] = result
+    return result
+
+
+def get_xdg_config_dir() -> Path:
+    """Return the Linux XDG config dir (``$XDG_CONFIG_HOME`` or ``~/.config``)."""
+    if "xdg_config" in _cache:
+        return _cache["xdg_config"]
+    env = os.environ.get("XDG_CONFIG_HOME")
+    result = Path(env) if env else Path.home() / ".config"
+    _cache["xdg_config"] = result
+    return result
+
+
+def get_xdg_data_dir() -> Path:
+    """Return the Linux XDG data dir (``$XDG_DATA_HOME`` or ``~/.local/share``)."""
+    if "xdg_data" in _cache:
+        return _cache["xdg_data"]
+    env = os.environ.get("XDG_DATA_HOME")
+    result = Path(env) if env else Path.home() / ".local" / "share"
+    _cache["xdg_data"] = result
+    return result
+
+
+def platform_data_dir_candidates(
+    macos_names: list[str] | tuple[str, ...] = (),
+    linux_names: list[str] | tuple[str, ...] = (),
+) -> list[Path]:
+    """Return conventional emulator data dirs for the current non-Windows OS.
+
+    macOS folders live under ``~/Library/Application Support``; Linux folders
+    live under both XDG config (``~/.config``) and data (``~/.local/share``).
+    Windows callers build their own lists (Documents / AppData / registry vary
+    too much to generalise).  Returned paths are *not* existence-filtered — the
+    caller decides.
+    """
+    system = platform.system()
+    out: list[Path] = []
+    if system == "Darwin":
+        base = get_app_support_dir()
+        out.extend(base / n for n in macos_names)
+    elif system != "Windows":  # Linux and other unix
+        cfg, data = get_xdg_config_dir(), get_xdg_data_dir()
+        for n in linux_names:
+            out.append(cfg / n)
+            out.append(data / n)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Placeholder table  (ordered longest-match-first for ``to_portable_path``)
 # ---------------------------------------------------------------------------
@@ -146,15 +200,25 @@ def get_home_dir() -> Path:
 def _placeholder_map() -> list[tuple[str, Path]]:
     """Return ``[(placeholder, real_path), ...]`` sorted longest path first.
 
-    Sorting ensures that more specific directories (e.g. ``${DOCUMENTS}``)
-    are matched before shorter prefixes (e.g. ``${HOME}``).
+    The set of placeholders is OS-specific: ``${APPDATA}`` /
+    ``${LOCALAPPDATA}`` on Windows, ``${APP_SUPPORT}`` on macOS, and
+    ``${XDG_CONFIG}`` / ``${XDG_DATA}`` on Linux.  ``${DOCUMENTS}`` and
+    ``${HOME}`` are universal.  Sorting longest-first ensures the most
+    specific directory wins.
     """
     entries = [
         ("${DOCUMENTS}", get_documents_dir()),
-        ("${APPDATA}", get_appdata_dir()),
-        ("${LOCALAPPDATA}", get_localappdata_dir()),
         ("${HOME}", get_home_dir()),
     ]
+    system = platform.system()
+    if system == "Windows":
+        entries.append(("${APPDATA}", get_appdata_dir()))
+        entries.append(("${LOCALAPPDATA}", get_localappdata_dir()))
+    elif system == "Darwin":
+        entries.append(("${APP_SUPPORT}", get_app_support_dir()))
+    else:  # Linux and other unix
+        entries.append(("${XDG_CONFIG}", get_xdg_config_dir()))
+        entries.append(("${XDG_DATA}", get_xdg_data_dir()))
     # Sort by path length descending so the most specific match wins.
     entries.sort(key=lambda x: len(str(x[1])), reverse=True)
     return entries

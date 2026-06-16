@@ -13,6 +13,7 @@ from loguru import logger
 
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
+from app.core.path_resolver import platform_data_dir_candidates
 from app.plugins.base import EmulatorPlugin
 
 # Save-state filename patterns
@@ -76,38 +77,47 @@ class Snes9xPlugin(EmulatorPlugin):
     ) -> list[EmulatorInfo]:
         """Detect Snes9x installations on this machine."""
         installations: list[EmulatorInfo] = []
-        if platform.system() != "Windows":
-            return installations
-
         candidates: list[Path] = []
 
-        # 0. User-configured paths
+        # 0. User-configured paths (all platforms)
         if extra_paths:
             for p in extra_paths:
                 if p.exists() and p not in candidates:
                     candidates.append(p)
 
-        # 1. AppData\Roaming\Snes9x (non-portable)
-        appdata = os.environ.get("APPDATA")
-        if appdata:
-            appdata_dir = Path(appdata) / "Snes9x"
-            if appdata_dir.exists():
-                candidates.append(appdata_dir)
+        system = platform.system()
+        if system == "Windows":
+            # 1. AppData\Roaming\Snes9x (non-portable)
+            appdata = os.environ.get("APPDATA")
+            if appdata:
+                appdata_dir = Path(appdata) / "Snes9x"
+                if appdata_dir.exists():
+                    candidates.append(appdata_dir)
 
-        # 2. Common portable installation directories
-        for prog_dir in [
-            Path("C:/Snes9x"),
-            Path("C:/Program Files/Snes9x"),
-            Path("C:/Program Files (x86)/Snes9x"),
-            Path.home() / "scoop" / "apps" / "snes9x",
-        ]:
-            if prog_dir.exists():
-                candidates.append(prog_dir)
+            # 2. Common portable installation directories
+            for prog_dir in [
+                Path("C:/Snes9x"),
+                Path("C:/Program Files/Snes9x"),
+                Path("C:/Program Files (x86)/Snes9x"),
+                Path.home() / "scoop" / "apps" / "snes9x",
+            ]:
+                if prog_dir.exists():
+                    candidates.append(prog_dir)
 
-        # 3. Scoop — current version symlink
-        scoop_current = Path.home() / "scoop" / "apps" / "snes9x" / "current"
-        if scoop_current.exists() and scoop_current not in candidates:
-            candidates.append(scoop_current)
+            # 3. Scoop — current version symlink
+            scoop_current = Path.home() / "scoop" / "apps" / "snes9x" / "current"
+            if scoop_current.exists() and scoop_current not in candidates:
+                candidates.append(scoop_current)
+        else:
+            # macOS: ~/Library/Application Support/Snes9x
+            # Linux (snes9x-gtk): ~/.config/snes9x; legacy ~/.snes9x
+            probes = platform_data_dir_candidates(
+                macos_names=["Snes9x"], linux_names=["snes9x"],
+            )
+            probes.append(Path.home() / ".snes9x")
+            for p in probes:
+                if p.exists() and p not in candidates:
+                    candidates.append(p)
 
         # Evaluate candidates
         for candidate in candidates:

@@ -13,6 +13,7 @@ from loguru import logger
 
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
+from app.core.path_resolver import platform_data_dir_candidates
 from app.plugins.base import EmulatorPlugin
 
 # ---------------------------------------------------------------------------
@@ -236,12 +237,9 @@ class DolphinPlugin(EmulatorPlugin):
     ) -> list[EmulatorInfo]:
         """Detect Dolphin installations on this machine."""
         installations: list[EmulatorInfo] = []
-        if platform.system() != "Windows":
-            return installations
-
         candidates: list[Path] = []
 
-        # 0. User-configured paths
+        # 0. User-configured paths (all platforms)
         if extra_paths:
             for p in extra_paths:
                 if not p.exists():
@@ -254,46 +252,56 @@ class DolphinPlugin(EmulatorPlugin):
                 elif p not in candidates:
                     candidates.append(p)
 
-        appdata = Path.home() / "AppData" / "Roaming"
-        localappdata = Path.home() / "AppData" / "Local"
+        system = platform.system()
+        if system == "Windows":
+            appdata = Path.home() / "AppData" / "Roaming"
+            localappdata = Path.home() / "AppData" / "Local"
 
-        # 1. Default: %APPDATA%/Dolphin Emulator  (most common)
-        dolphin_appdata = appdata / "Dolphin Emulator"
-        if dolphin_appdata.exists():
-            candidates.append(dolphin_appdata)
+            # 1. Default: %APPDATA%/Dolphin Emulator  (most common)
+            dolphin_appdata = appdata / "Dolphin Emulator"
+            if dolphin_appdata.exists():
+                candidates.append(dolphin_appdata)
 
-        # 2. %LOCALAPPDATA%/Dolphin Emulator  (some builds)
-        dolphin_local = localappdata / "Dolphin Emulator"
-        if dolphin_local.exists() and dolphin_local not in candidates:
-            candidates.append(dolphin_local)
+            # 2. %LOCALAPPDATA%/Dolphin Emulator  (some builds)
+            dolphin_local = localappdata / "Dolphin Emulator"
+            if dolphin_local.exists() and dolphin_local not in candidates:
+                candidates.append(dolphin_local)
 
-        # 3. Documents/Dolphin Emulator  (older versions)
-        try:
+            # 3. Documents/Dolphin Emulator  (older versions)
             from app.core.path_resolver import get_documents_dir
             docs_dolphin = get_documents_dir() / "Dolphin Emulator"
             if docs_dolphin.exists() and docs_dolphin not in candidates:
                 candidates.append(docs_dolphin)
-        except ImportError:
-            pass
 
-        # 4. Portable mode — portable.txt next to executable
-        for prog_path in [
-            Path("C:/Dolphin"),
-            Path("C:/Program Files/Dolphin"),
-            Path("C:/Program Files (x86)/Dolphin"),
-            Path("C:/Dolphin-x64"),
-            Path.home() / "scoop" / "apps" / "dolphin",
-            Path.home() / "scoop" / "apps" / "dolphin" / "current",
-        ]:
-            if prog_path.exists():
-                # Portable mode: User/ directory next to exe
-                user_dir = prog_path / "User"
-                portable_txt = prog_path / "portable.txt"
-                if user_dir.exists() or portable_txt.exists():
-                    candidates.append(user_dir if user_dir.exists() else prog_path)
-                elif (prog_path / "Sys").exists():
-                    # Installation dir without portable — data is in AppData
-                    pass
+            # 4. Portable mode — portable.txt next to executable
+            for prog_path in [
+                Path("C:/Dolphin"),
+                Path("C:/Program Files/Dolphin"),
+                Path("C:/Program Files (x86)/Dolphin"),
+                Path("C:/Dolphin-x64"),
+                Path.home() / "scoop" / "apps" / "dolphin",
+                Path.home() / "scoop" / "apps" / "dolphin" / "current",
+            ]:
+                if prog_path.exists():
+                    # Portable mode: User/ directory next to exe
+                    user_dir = prog_path / "User"
+                    portable_txt = prog_path / "portable.txt"
+                    if user_dir.exists() or portable_txt.exists():
+                        candidates.append(user_dir if user_dir.exists() else prog_path)
+                    elif (prog_path / "Sys").exists():
+                        # Installation dir without portable — data is in AppData
+                        pass
+        else:
+            # macOS: ~/Library/Application Support/Dolphin
+            # Linux: ~/.local/share/dolphin-emu (+ XDG config), Flatpak
+            probes = platform_data_dir_candidates(
+                macos_names=["Dolphin"], linux_names=["dolphin-emu"],
+            )
+            probes.append(Path.home() / ".var" / "app"
+                          / "org.DolphinEmu.dolphin-emu" / "data" / "dolphin-emu")
+            for p in probes:
+                if p.exists() and p not in candidates:
+                    candidates.append(p)
 
         for candidate in candidates:
             is_portable = (

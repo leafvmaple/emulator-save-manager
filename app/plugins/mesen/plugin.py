@@ -12,7 +12,7 @@ from loguru import logger
 
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
-from app.core.path_resolver import get_documents_dir
+from app.core.path_resolver import get_documents_dir, platform_data_dir_candidates
 from app.plugins.base import EmulatorPlugin
 
 # Mesen2 save state header
@@ -126,38 +126,49 @@ class MesenPlugin(EmulatorPlugin):
     ) -> list[EmulatorInfo]:
         """Detect Mesen2 installations."""
         installations: list[EmulatorInfo] = []
-        if platform.system() != "Windows":
-            return installations
-
         candidates: list[Path] = []
 
-        # 0. User-configured paths
+        # 0. User-configured paths (all platforms)
         if extra_paths:
             for p in extra_paths:
                 if p.exists() and p not in candidates:
                     candidates.append(p)
 
-        # 1. Default: Documents/Mesen2
+        # Default Documents/Mesen2 data dir (Windows; harmless probe elsewhere)
         docs_path = get_documents_dir() / "Mesen2"
-        if docs_path.exists():
-            candidates.append(docs_path)
+        system = platform.system()
 
-        # 2. Portable mode: check common installation dirs
-        for prog_dir in [
-            Path("C:/Mesen2"),
-            Path("C:/Mesen"),
-            Path("C:/Program Files/Mesen2"),
-            Path("C:/Program Files/Mesen"),
-            Path.home() / "scoop" / "apps" / "mesen",
-        ]:
-            if prog_dir.exists():
-                # Portable if settings.json exists next to exe
-                if (prog_dir / "settings.json").exists():
-                    candidates.append(prog_dir)
-                elif docs_path.exists():
-                    pass  # already have the docs path
-                else:
-                    candidates.append(prog_dir)
+        if system == "Windows":
+            # 1. Default: Documents/Mesen2
+            if docs_path.exists():
+                candidates.append(docs_path)
+
+            # 2. Portable mode: check common installation dirs
+            for prog_dir in [
+                Path("C:/Mesen2"),
+                Path("C:/Mesen"),
+                Path("C:/Program Files/Mesen2"),
+                Path("C:/Program Files/Mesen"),
+                Path.home() / "scoop" / "apps" / "mesen",
+            ]:
+                if prog_dir.exists():
+                    # Portable if settings.json exists next to exe
+                    if (prog_dir / "settings.json").exists():
+                        candidates.append(prog_dir)
+                    elif docs_path.exists():
+                        pass  # already have the docs path
+                    else:
+                        candidates.append(prog_dir)
+        else:
+            # macOS: ~/Library/Application Support/Mesen2
+            # Linux: ~/.config/Mesen2, ~/.local/share/Mesen2; also ~/Mesen2
+            probes = platform_data_dir_candidates(
+                macos_names=["Mesen2"], linux_names=["Mesen2"],
+            )
+            probes.append(Path.home() / "Mesen2")
+            for p in probes:
+                if p.exists() and p not in candidates:
+                    candidates.append(p)
 
         # Evaluate
         for candidate in candidates:

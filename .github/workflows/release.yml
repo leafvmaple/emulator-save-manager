@@ -168,12 +168,13 @@ jobs:
           path: CHANGELOG.md
 
   # ---------------------------------------------------------------
-  # 2. Build matrix — Windows & macOS
+  # 2. Build matrix — Windows, macOS & Linux
   # ---------------------------------------------------------------
   build:
     name: Build (${{ matrix.os_label }})
     needs: prepare
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -183,6 +184,10 @@ jobs:
           - os: macos-latest
             os_label: macOS
             artifact_name: EmulatorSaveManager-macOS
+            ext: ""
+          - os: ubuntu-latest
+            os_label: Linux
+            artifact_name: EmulatorSaveManager-Linux
             ext: ""
     runs-on: ${{ matrix.os }}
     steps:
@@ -196,6 +201,15 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+
+      - name: Install Linux system libraries (Qt runtime deps)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 libgl1 libxkbcommon0 libdbus-1-3 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0
 
       - name: Install dependencies
         run: |
@@ -272,3 +286,4 @@ jobs:
           files: |
             artifacts/EmulatorSaveManager-Windows/EmulatorSaveManager-Windows.exe
             artifacts/EmulatorSaveManager-macOS/EmulatorSaveManager-macOS
+            artifacts/EmulatorSaveManager-Linux/EmulatorSaveManager-Linux
