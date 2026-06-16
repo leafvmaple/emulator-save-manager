@@ -1,3 +1,17 @@
+# v0.7.1
+
+Released on 2026-06-16
+
+## 🐛 Bug Fixes
+
+- fix: don't crash on startup in windowed builds (sys.stderr is None) (`0c1e053`)
+
+## 📦 Other Changes
+
+- ci: release body shows only the current version's notes (`c9a7fba`)
+
+---
+
 # v0.7.0
 
 Released on 2026-06-16
