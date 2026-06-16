@@ -1,3 +1,21 @@
+# v0.4.0
+
+Released on 2026-06-16
+
+## ✨ Features
+
+- feat: cross-platform emulator detection (macOS + Linux) — Stage 2 (`48add27`)
+- feat: finish Stage 1 — atomic config, cancellable ops, backup management UI (`af7197c`)
+- feat(restore): transactional restore with snapshot + rollback (`8ce56ce`)
+
+## 📦 Other Changes
+
+- ci: fix test collection — put project root on sys.path (`8fce7f9`)
+- ci: add pytest quality gate on push/PR (`3429130`)
+- test: add local pytest suite (Stage 1 kickoff) (`a167de3`)
+
+---
+
 # v0.3.0
 
 Released on 2026-06-16
