@@ -5,6 +5,7 @@ from __future__ import annotations
 import platform
 import re
 import struct
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO
@@ -500,3 +501,20 @@ class PCSX2Plugin(EmulatorPlugin):
             "memcards": dp / "memcards",
             "savestates": dp / "sstates",
         }
+
+    def get_state_thumbnail(self, save_path: Path) -> bytes | None:
+        """Extract the screenshot embedded in a PCSX2 save state.
+
+        ``.p2s`` files are ZIP archives that contain a ``Screenshot.png``
+        of the game at save time.  Returns its bytes, or ``None``.
+        """
+        if save_path.suffix.lower() != ".p2s":
+            return None
+        try:
+            with zipfile.ZipFile(save_path, "r") as zf:
+                for name in zf.namelist():
+                    if name.lower().endswith(".png"):
+                        return zf.read(name)
+        except (zipfile.BadZipFile, OSError) as e:
+            logger.debug("No thumbnail in {}: {}", save_path, e)
+        return None

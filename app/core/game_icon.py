@@ -92,6 +92,8 @@ class GameIconProvider:
         self._pixmap_cache: dict[tuple[str, str, int], QPixmap] = {}
         # Per-emulator cover URL resolvers: emulator_name → callable(game_id) → url
         self._cover_resolvers: dict[str, object] = {}
+        # Per-emulator save-state thumbnail extractors: emulator → callable(Path) → bytes|None
+        self._thumbnail_extractors: dict[str, object] = {}
 
     # ------------------------------------------------------------------
     # Configuration
@@ -108,6 +110,41 @@ class GameIconProvider:
         either an image URL (``str``) or ``None``.
         """
         self._cover_resolvers[emulator] = resolver
+
+    def register_thumbnail_extractor(self, emulator: str, extractor) -> None:
+        """Register a callable that maps a save-state ``Path`` → image bytes.
+
+        The callable returns PNG/JPEG bytes for a save-state file, or ``None``.
+        """
+        self._thumbnail_extractors[emulator] = extractor
+
+    def extract_thumbnail(
+        self, emulator: str, game_id: str, state_paths
+    ) -> Path | None:
+        """Extract a save-state thumbnail and cache it as the game's icon.
+
+        Tries each path in *state_paths* (caller passes them newest-first) and
+        writes the first image found to the shared icon cache so subsequent
+        ``get_icon_path`` look-ups find it.  Returns the cached path or *None*.
+        """
+        fn = self._thumbnail_extractors.get(emulator)
+        if fn is None:
+            return None
+        for p in state_paths:
+            try:
+                data = fn(Path(p))
+            except Exception as e:  # noqa: BLE001 - extractor must never crash scan
+                logger.debug("Thumbnail extract failed for {}: {}", p, e)
+                data = None
+            if data:
+                dest = self._cache_dir / f"{game_id}.png"
+                try:
+                    dest.write_bytes(data)
+                except OSError as e:
+                    logger.debug("Cannot cache thumbnail for {}: {}", game_id, e)
+                    return None
+                return dest
+        return None
 
     # ------------------------------------------------------------------
     # Public API
@@ -249,7 +286,7 @@ class IconDownloadWorker(QThread):
     def __init__(
         self,
         provider: GameIconProvider,
-        requests: Sequence[tuple[str, str]],  # [(emulator, game_id), ...]
+        requests: Sequence[tuple],  # [(emulator, game_id[, state_paths]), ...]
         parent=None,  # noqa: ANN001
     ) -> None:
         super().__init__(parent)
@@ -257,11 +294,16 @@ class IconDownloadWorker(QThread):
         self._requests = list(requests)
 
     def run(self) -> None:
-        for emulator, game_id in self._requests:
+        for req in self._requests:
+            emulator, game_id = req[0], req[1]
+            state_paths = req[2] if len(req) > 2 else []
             # Skip if already cached
             if self._provider.get_icon_path(emulator, game_id):
                 continue
+            # Prefer a downloadable cover; fall back to a local save-state thumbnail.
             path = self._provider.download_cover(game_id, emulator=emulator)
+            if not path and state_paths:
+                path = self._provider.extract_thumbnail(emulator, game_id, state_paths)
             if path:
                 self.icon_ready.emit(emulator, game_id, str(path))
         self.all_done.emit()

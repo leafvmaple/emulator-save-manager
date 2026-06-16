@@ -190,6 +190,20 @@ class RetroArchPlugin(EmulatorPlugin):
 
         return {"saves": saves_dir, "savestates": states_dir}
 
+    def get_state_thumbnail(self, save_path: Path) -> bytes | None:
+        """Return a RetroArch save-state thumbnail (sibling ``<state>.png``).
+
+        With "Save State Thumbnail Enable" on, RetroArch writes a PNG next to
+        the state file at ``<state_path>.png``.
+        """
+        sibling = save_path.with_name(save_path.name + ".png")
+        if sibling.is_file():
+            try:
+                return sibling.read_bytes()
+            except OSError as e:
+                logger.debug("Cannot read thumbnail {}: {}", sibling, e)
+        return None
+
     def scan_saves(
         self,
         emulator_info: EmulatorInfo,

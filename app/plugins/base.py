@@ -178,3 +178,14 @@ class EmulatorPlugin(ABC):
         list (no cover available).
         """
         return []
+
+    def get_state_thumbnail(self, save_path: Path) -> bytes | None:
+        """Return a preview image (PNG/JPEG bytes) for a save-state file.
+
+        Many emulators embed a screenshot of the game at save time, or store
+        it as a sibling file.  Override in plugins whose save-state format
+        carries one (e.g. PCSX2 ``.p2s`` zips with ``Screenshot.png``,
+        RetroArch sibling ``<state>.png``).  The default returns ``None``
+        (no thumbnail available).
+        """
+        return None

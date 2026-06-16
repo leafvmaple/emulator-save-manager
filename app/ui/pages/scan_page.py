@@ -641,6 +641,10 @@ class ScanPage(QWidget):
                             self._icon_provider.register_cover_resolver(
                                 emu.name, plugin.get_cover_urls,
                             )
+                        if plugin is not None and hasattr(plugin, "get_state_thumbnail"):
+                            self._icon_provider.register_thumbnail_extractor(
+                                emu.name, plugin.get_state_thumbnail,
+                            )
 
         self._refresh_emulator_cards()
         self._refresh_game_cards()
@@ -743,19 +747,33 @@ class ScanPage(QWidget):
     # ------------------------------------------------------------------
 
     def _start_icon_download(self) -> None:
-        """Kick off background downloads for missing cover art."""
+        """Kick off background fetch of cover art / save-state thumbnails."""
         if not self._icon_provider or not self._saves:
             return
-        # Collect unique (emulator, game_id) pairs that have no icon yet
-        requests: list[tuple[str, str]] = []
+        # Gather save-state paths per game (newest first) for thumbnail fallback.
+        states_by_key: dict[str, list] = {}
+        for s in self._saves:
+            key = f"{s.emulator}:{s.game_id}"
+            for sf in s.save_files:
+                if sf.save_type == SaveType.SAVESTATE:
+                    states_by_key.setdefault(key, []).append((sf.modified, sf.path))
+
+        # One request per unique game that has no icon yet.
+        requests: list[tuple] = []
         seen: set[str] = set()
         for s in self._saves:
             key = f"{s.emulator}:{s.game_id}"
             if key in seen:
                 continue
             seen.add(key)
-            if not self._icon_provider.get_icon_path(s.emulator, s.game_id):
-                requests.append((s.emulator, s.game_id))
+            if self._icon_provider.get_icon_path(s.emulator, s.game_id):
+                continue
+            paths = [
+                p for _, p in sorted(
+                    states_by_key.get(key, []), key=lambda x: x[0], reverse=True
+                )
+            ]
+            requests.append((s.emulator, s.game_id, paths))
         if not requests:
             return
         self._icon_worker = IconDownloadWorker(self._icon_provider, requests, self)
