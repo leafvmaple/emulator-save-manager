@@ -15,6 +15,8 @@ from loguru import logger
 
 from app.i18n import t
 from app.core.sync import SyncResult
+from app.core.conflict import ConflictInfo, ConflictResolution
+from app.ui.components.conflict_dialog import ConflictDialog, BatchConflictDialog
 
 
 class _SyncWorker(QThread):
@@ -34,8 +36,38 @@ class _SyncWorker(QThread):
 
     def run(self) -> None:
         try:
-            result = self._sync_manager.sync_all()
+            if self._mode == "push":
+                result = self._sync_manager.push_all()
+            elif self._mode == "pull":
+                result = self._sync_manager.pull_all()
+            else:
+                result = self._sync_manager.sync_all()
             self.finished.emit(result)
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class _ResolveWorker(QThread):
+    """Background thread that applies conflict resolutions."""
+
+    finished = Signal(list)  # list[str] errors
+    error = Signal(str)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._sync_manager = None
+        self._items: list[tuple[ConflictInfo, ConflictResolution]] = []
+
+    def set_data(self, sync_manager, items) -> None:  # noqa: ANN001
+        self._sync_manager = sync_manager
+        self._items = items
+
+    def run(self) -> None:
+        try:
+            errors: list[str] = []
+            for conflict, resolution in self._items:
+                errors.extend(self._sync_manager.apply_resolution(conflict, resolution))
+            self.finished.emit(errors)
         except Exception as e:
             self.error.emit(str(e))
 
@@ -49,10 +81,15 @@ class SyncPage(QWidget):
         self._sync_manager = None
         self._config = None
         self._worker: _SyncWorker | None = None
+        self._resolve_worker: _ResolveWorker | None = None
         self._init_ui()
 
     def set_sync_manager(self, sm) -> None:  # noqa: ANN001
         self._sync_manager = sm
+
+    def start_sync(self) -> None:
+        """Public entry point for triggering a full sync (e.g. on startup)."""
+        self._run_sync("sync_all")
 
     def set_config(self, config) -> None:  # noqa: ANN001
         self._config = config
@@ -196,25 +233,6 @@ class SyncPage(QWidget):
         msg = t("sync.sync_success", push=str(result.pushed), pull=str(result.pulled))
         self._status_msg.setText(msg)
 
-        if result.conflicts:
-            msg += f"\n{t('sync.conflict_found', count=str(len(result.conflicts)))}"
-            InfoBar.warning(
-                title=t("sync.sync_complete"),
-                content=msg,
-                parent=self,
-                position=InfoBarPosition.TOP,
-                duration=5000,
-            )
-            # TODO: open conflict dialog
-        else:
-            InfoBar.success(
-                title=t("sync.sync_complete"),
-                content=msg,
-                parent=self,
-                position=InfoBarPosition.TOP,
-                duration=3000,
-            )
-
         if result.errors:
             self._log_label.show()
             self._log_body.setText("\n".join(result.errors))
@@ -232,6 +250,78 @@ class SyncPage(QWidget):
                     position=InfoBarPosition.TOP,
                     duration=8000,
                 )
+
+        if result.conflicts:
+            msg += f"\n{t('sync.conflict_found', count=str(len(result.conflicts)))}"
+            self._status_msg.setText(msg)
+            self._handle_conflicts(result.conflicts)
+        else:
+            InfoBar.success(
+                title=t("sync.sync_complete"),
+                content=msg,
+                parent=self,
+                position=InfoBarPosition.TOP,
+                duration=3000,
+            )
+
+    # ------------------------------------------------------------------
+    # Conflict resolution
+    # ------------------------------------------------------------------
+
+    def _handle_conflicts(self, conflicts: list[ConflictInfo]) -> None:
+        """Prompt the user to resolve sync conflicts, then apply the choices."""
+        if len(conflicts) == 1:
+            dlg = ConflictDialog(conflicts[0], self)
+            if not dlg.exec():
+                return
+            pairs = [(conflicts[0], dlg.resolution)]
+        else:
+            dlg = BatchConflictDialog(conflicts, self)
+            if not dlg.exec():
+                return
+            res_map = dlg.resolutions
+            pairs = [
+                (c, res_map.get(c.game_id, ConflictResolution.SKIP))
+                for c in conflicts
+            ]
+
+        pairs = [(c, r) for c, r in pairs if r != ConflictResolution.SKIP]
+        if not pairs:
+            return
+
+        self._sync_btn.setEnabled(False)
+        self._push_btn.setEnabled(False)
+        self._pull_btn.setEnabled(False)
+        self._progress.show()
+        self._status_msg.setText(t("conflict.resolving"))
+
+        self._resolve_worker = _ResolveWorker(self)
+        self._resolve_worker.set_data(self._sync_manager, pairs)
+        self._resolve_worker.finished.connect(self._on_resolve_finished)
+        self._resolve_worker.error.connect(self._on_sync_error)
+        self._resolve_worker.start()
+
+    def _on_resolve_finished(self, errors: list) -> None:
+        self._sync_btn.setEnabled(True)
+        self._push_btn.setEnabled(True)
+        self._pull_btn.setEnabled(True)
+        self._progress.hide()
+
+        if errors:
+            self._log_label.show()
+            self._log_body.setText("\n".join(errors))
+            InfoBar.warning(
+                title=t("conflict.title"),
+                content="\n".join(errors),
+                parent=self, position=InfoBarPosition.TOP, duration=5000,
+            )
+        else:
+            self._status_msg.setText(t("conflict.resolved"))
+            InfoBar.success(
+                title=t("conflict.title"),
+                content=t("conflict.resolved"),
+                parent=self, position=InfoBarPosition.TOP, duration=3000,
+            )
 
     def _on_sync_error(self, error: str) -> None:
         self._sync_btn.setEnabled(True)

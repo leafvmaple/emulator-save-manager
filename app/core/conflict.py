@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -50,6 +51,28 @@ def file_sha256(path: Path) -> str:
                 h.update(chunk)
     except Exception as e:
         logger.debug("Hash failed for {}: {}", path, e)
+        return ""
+    return h.hexdigest()
+
+
+def zip_content_hash(zip_path: Path) -> str:
+    """Compute a SHA-256 over a ZIP's *decompressed content* only.
+
+    Unlike :func:`file_sha256`, this ignores per-entry modification
+    timestamps and compression metadata that the ZIP container embeds.
+    Two archives holding identical save data therefore hash equal even
+    when they were created at different times — which is exactly what
+    sync needs to tell "same content" from "real conflict".
+    """
+    h = hashlib.sha256()
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            for name in sorted(zf.namelist()):
+                h.update(name.encode("utf-8"))
+                h.update(b"\x00")
+                h.update(zf.read(name))
+    except Exception as e:
+        logger.debug("Zip content hash failed for {}: {}", zip_path, e)
         return ""
     return h.hexdigest()
 

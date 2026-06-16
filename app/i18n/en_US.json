@@ -98,7 +98,9 @@
         "local_info": "Local Version",
         "remote_info": "Remote Version",
         "modified_time": "Modified",
-        "source_machine": "Source Device"
+        "source_machine": "Source Device",
+        "resolving": "Resolving conflicts…",
+        "resolved": "Conflicts resolved"
     },
     "settings": {
         "title": "Settings",

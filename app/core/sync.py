@@ -16,7 +16,10 @@ from loguru import logger
 
 from app.config import Config
 from app.core.backup import BackupManager
-from app.core.conflict import ConflictDetector, ConflictInfo, ConflictResolution, file_sha256
+from app.core.conflict import (
+    ConflictDetector, ConflictInfo, ConflictResolution,
+    file_sha256, zip_content_hash,
+)
 
 
 SYNC_MANIFEST = "sync_manifest.json"
@@ -111,9 +114,7 @@ class SyncManager:
 
         # Check for conflict with existing remote version
         if dest_zip.exists():
-            local_hash = file_sha256(local_zip)
-            remote_hash = file_sha256(dest_zip)
-            if local_hash == remote_hash:
+            if self._content_hash(local_zip) == self._content_hash(dest_zip):
                 logger.info("Push skipped — already in sync: {}:{}", emulator, game_id)
                 return result
             conflict = self._detector.detect(
@@ -182,9 +183,7 @@ class SyncManager:
         local_backups = self._bm.list_backups(emulator, game_id)
         if local_backups:
             latest_local = local_backups[0]
-            local_hash = file_sha256(latest_local.backup_path)
-            remote_hash = file_sha256(latest_remote_zip)
-            if local_hash == remote_hash:
+            if self._content_hash(latest_local.backup_path) == self._content_hash(latest_remote_zip):
                 logger.info("Pull skipped — already in sync: {}:{}", emulator, game_id)
                 return result
 
@@ -220,23 +219,35 @@ class SyncManager:
     # Full sync
     # ------------------------------------------------------------------
 
-    def sync_all(self) -> SyncResult:
-        """Perform a full bidirectional sync for all known backups."""
+    def push_all(self) -> SyncResult:
+        """Push every local backup to the sync folder."""
         result = SyncResult()
         if not self.is_configured:
             result.errors.append("Sync folder not configured")
             return result
 
-        # Push all local backups
         all_local = self._bm.list_all_backups()
-        for key, records in all_local.items():
+        for key in all_local:
             emulator, game_id = key.split(":", 1)
             r = self.push(emulator, game_id)
             result.pushed += r.pushed
             result.conflicts.extend(r.conflicts)
             result.errors.extend(r.errors)
+            result.crc32_warnings.extend(r.crc32_warnings)
 
-        # Pull remote backups not present locally
+        logger.info(
+            "Push complete — pushed: {}, conflicts: {}, errors: {}",
+            result.pushed, len(result.conflicts), len(result.errors),
+        )
+        return result
+
+    def pull_all(self) -> SyncResult:
+        """Pull every remote backup from the sync folder."""
+        result = SyncResult()
+        if not self.is_configured:
+            result.errors.append("Sync folder not configured")
+            return result
+
         if self.sync_root.exists():
             for emu_dir in self.sync_root.iterdir():
                 if not emu_dir.is_dir():
@@ -247,12 +258,33 @@ class SyncManager:
                     # Only pull if the remote dir contains zip files
                     if not any(game_dir.glob("*.zip")):
                         continue
-                    emulator = emu_dir.name
-                    game_id = game_dir.name
-                    r = self.pull(emulator, game_id)
+                    r = self.pull(emu_dir.name, game_dir.name)
                     result.pulled += r.pulled
                     result.conflicts.extend(r.conflicts)
                     result.errors.extend(r.errors)
+                    result.crc32_warnings.extend(r.crc32_warnings)
+
+        logger.info(
+            "Pull complete — pulled: {}, conflicts: {}, errors: {}",
+            result.pulled, len(result.conflicts), len(result.errors),
+        )
+        return result
+
+    def sync_all(self) -> SyncResult:
+        """Perform a full bidirectional sync for all known backups."""
+        result = SyncResult()
+        if not self.is_configured:
+            result.errors.append("Sync folder not configured")
+            return result
+
+        push_result = self.push_all()
+        pull_result = self.pull_all()
+
+        result.pushed = push_result.pushed
+        result.pulled = pull_result.pulled
+        result.conflicts = push_result.conflicts + pull_result.conflicts
+        result.errors = push_result.errors + pull_result.errors
+        result.crc32_warnings = push_result.crc32_warnings + pull_result.crc32_warnings
 
         logger.info(
             "Sync complete — pushed: {}, pulled: {}, conflicts: {}, errors: {}",
@@ -336,6 +368,18 @@ class SyncManager:
                 json.dump(manifest, f, indent=4, ensure_ascii=False)
         except Exception as e:
             logger.error("Failed to update sync manifest: {}", e)
+
+    def _content_hash(self, zip_path: Path) -> str:
+        """Return the archive's content hash, preferring the cached sidecar value.
+
+        Falls back to computing it from the ZIP (for backups created before
+        ``content_hash`` was recorded).  Unlike a raw file hash this ignores
+        embedded timestamps, so identical saves compare equal across machines.
+        """
+        cached = self._read_meta_field(zip_path.with_suffix(".json"), "content_hash")
+        if cached:
+            return cached
+        return zip_content_hash(zip_path)
 
     @staticmethod
     def _read_meta_field(meta_path: Path, field: str) -> str:

@@ -470,6 +470,10 @@ class ScanPage(QWidget):
     def set_icon_provider(self, provider: GameIconProvider) -> None:
         self._icon_provider = provider
 
+    def start_scan(self) -> None:
+        """Public entry point for triggering a scan (e.g. on startup)."""
+        self._on_scan()
+
     # ------------------------------------------------------------------
     # UI Setup
     # ------------------------------------------------------------------

@@ -98,7 +98,9 @@
         "local_info": "本地版本",
         "remote_info": "远端版本",
         "modified_time": "修改时间",
-        "source_machine": "来源设备"
+        "source_machine": "来源设备",
+        "resolving": "正在处理冲突…",
+        "resolved": "冲突已处理"
     },
     "settings": {
         "title": "设置",

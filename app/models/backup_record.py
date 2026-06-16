@@ -58,6 +58,9 @@ class BackupInfo:
     emulator_data_path: str = ""
     """Portable path of the emulator data directory at backup time.
     Used to resolve ``${EMU_DATA}`` placeholders on restore."""
+    content_hash: str = ""
+    """SHA-256 over the archive's decompressed content (timestamp-independent).
+    Used by sync to distinguish identical content from real conflicts."""
 
     def to_dict(self) -> dict:
         return {
@@ -71,6 +74,7 @@ class BackupInfo:
             "source_machine": self.source_machine,
             "crc32": self.crc32,
             "emulator_data_path": self.emulator_data_path,
+            "content_hash": self.content_hash,
         }
 
     @classmethod
@@ -86,4 +90,5 @@ class BackupInfo:
             label=data.get("label", ""),
             source_machine=data.get("source_machine", ""),
             crc32=data.get("crc32", ""),
+            content_hash=data.get("content_hash", ""),
         )

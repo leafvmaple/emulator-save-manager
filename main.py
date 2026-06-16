@@ -71,6 +71,14 @@ def main() -> None:
     window.show()
     logger.info("Window shown, entering event loop")
 
+    # ---- 8. Optional auto-start actions ----
+    if config.auto_scan_on_start:
+        logger.info("Auto-scan on start enabled")
+        window.scan_page.start_scan()
+    if config.auto_sync_on_start and sync_mgr.is_configured:
+        logger.info("Auto-sync on start enabled")
+        window.sync_page.start_sync()
+
     sys.exit(app.exec())
 
 

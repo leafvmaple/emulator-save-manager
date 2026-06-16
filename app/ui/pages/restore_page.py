@@ -34,6 +34,29 @@ from app.models.game_save import SaveType
 from app.core.game_icon import GameIconProvider, get_plugin_icon
 
 
+class _RestoreWorker(QThread):
+    """Background thread for restoring a backup without freezing the UI."""
+
+    finished = Signal(list)  # list[str] errors
+    error = Signal(str)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._manager = None
+        self._record: BackupRecord | None = None
+
+    def set_data(self, manager, record: BackupRecord) -> None:  # noqa: ANN001
+        self._manager = manager
+        self._record = record
+
+    def run(self) -> None:
+        try:
+            errors = self._manager.restore_backup(self._record, force=True)
+            self.finished.emit(errors)
+        except Exception as e:
+            self.error.emit(str(e))
+
+
 def _format_size(size_bytes: int) -> str:
     if size_bytes < 1024:
         return f"{size_bytes} B"
@@ -323,6 +346,7 @@ class RestorePage(QWidget):
         self._all_backups: dict[str, list[BackupRecord]] = {}
         self._cards: list[_GameBackupCard] = []
         self._icon_provider: GameIconProvider | None = None
+        self._restore_worker: _RestoreWorker | None = None
         self._init_ui()
 
     def set_managers(self, backup_manager, restore_manager) -> None:  # noqa: ANN001
@@ -443,6 +467,8 @@ class RestorePage(QWidget):
     def _on_restore(self, record: BackupRecord) -> None:
         if self._restore_manager is None:
             return
+        if self._restore_worker is not None and self._restore_worker.isRunning():
+            return  # a restore is already in progress
 
         # Preview and confirm
         changes = self._restore_manager.preview_restore(record)
@@ -457,11 +483,20 @@ class RestorePage(QWidget):
             if not box.exec():
                 return
 
+        self._set_cards_enabled(False)
         self._progress.show()
         self._status_label.setText(t("restore.restoring"))
-        errors = self._restore_manager.restore_backup(record, force=True)
+
+        self._restore_worker = _RestoreWorker(self)
+        self._restore_worker.set_data(self._restore_manager, record)
+        self._restore_worker.finished.connect(self._on_restore_finished)
+        self._restore_worker.error.connect(self._on_restore_error)
+        self._restore_worker.start()
+
+    def _on_restore_finished(self, errors: list) -> None:
         self._progress.hide()
         self._status_label.setText("")
+        self._set_cards_enabled(True)
 
         if errors:
             InfoBar.warning(
@@ -475,3 +510,17 @@ class RestorePage(QWidget):
                 content=t("restore.restore_success", count="1"),
                 parent=self, position=InfoBarPosition.TOP, duration=3000,
             )
+
+    def _on_restore_error(self, error: str) -> None:
+        self._progress.hide()
+        self._status_label.setText("")
+        self._set_cards_enabled(True)
+        InfoBar.error(
+            title=t("common.error"), content=error,
+            parent=self, position=InfoBarPosition.TOP, duration=5000,
+        )
+
+    def _set_cards_enabled(self, enabled: bool) -> None:
+        """Enable/disable all game cards while a restore runs."""
+        for card in self._cards:
+            card.setEnabled(enabled)

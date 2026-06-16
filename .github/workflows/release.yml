@@ -206,18 +206,17 @@ jobs:
       - name: Build with PyInstaller
         shell: bash
         run: |
+          # Plugins are loaded dynamically via importlib, so PyInstaller's
+          # static analysis can't see them — collect every submodule AND the
+          # bundled data files (game_names.json, icon.png) for all plugins.
           pyinstaller \
             --noconfirm \
             --onefile \
             --windowed \
             --name "EmulatorSaveManager" \
-            --add-data "app/i18n/*.json${{ runner.os == 'Windows' && ';' || ':' }}app/i18n/" \
-            --add-data "app/plugins/citra/game_names.json${{ runner.os == 'Windows' && ';' || ':' }}app/plugins/citra/" \
-            --add-data "app/plugins/pcsx2/game_names.json${{ runner.os == 'Windows' && ';' || ':' }}app/plugins/pcsx2/" \
-            --hidden-import "app.plugins.citra" \
-            --hidden-import "app.plugins.mesen" \
-            --hidden-import "app.plugins.pcsx2" \
-            --hidden-import "app.plugins.snes9x" \
+            --collect-submodules app.plugins \
+            --collect-data app.plugins \
+            --collect-data app.i18n \
             main.py
 
       - name: Prepare artifact

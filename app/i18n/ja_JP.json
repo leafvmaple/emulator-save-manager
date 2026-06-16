@@ -98,7 +98,9 @@
         "local_info": "ローカル版",
         "remote_info": "リモート版",
         "modified_time": "更新日時",
-        "source_machine": "ソースデバイス"
+        "source_machine": "ソースデバイス",
+        "resolving": "競合を解決しています…",
+        "resolved": "競合を解決しました"
     },
     "settings": {
         "title": "設定",

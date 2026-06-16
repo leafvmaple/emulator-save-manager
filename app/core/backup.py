@@ -22,6 +22,7 @@ from loguru import logger
 from app.config import Config
 from app.models.backup_record import BackupInfo, BackupRecord
 from app.models.game_save import GameSave
+from app.core.conflict import zip_content_hash
 from app.core.path_resolver import to_portable_path
 
 
@@ -124,6 +125,9 @@ class BackupManager:
         portable_data_path = (
             to_portable_path(emu_data_path) if emu_data_path else ""
         )
+        # Stable, timestamp-independent hash of the archive content so sync
+        # can tell identical saves apart from genuine conflicts.
+        content_hash = zip_content_hash(zip_path)
         info = BackupInfo(
             title=game_name,
             game_id=game_id,
@@ -133,6 +137,7 @@ class BackupManager:
             source_machine=self._cfg.machine_id,
             crc32=crc32,
             emulator_data_path=portable_data_path,
+            content_hash=content_hash,
         )
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(info.to_dict(), f, indent=4, ensure_ascii=False)
