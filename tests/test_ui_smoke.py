@@ -44,6 +44,31 @@ def test_stage0_workers_instantiate(qtbot, cfg):
         assert w is not None
 
 
+def test_webdav_settings_ui(qtbot, cfg):
+    from app.i18n import init as i18n_init
+    from app.ui.pages.settings_page import SettingsPage
+
+    i18n_init(cfg.language)
+    cfg.set("sync_backend", "webdav")
+    cfg.set("webdav_url", "https://dav.example/")
+    cfg.set("webdav_username", "alice")
+
+    page = SettingsPage()
+    qtbot.addWidget(page)
+    page.set_config(cfg)
+
+    # WebDAV mode: folder card hidden, WebDAV card shown with fields loaded.
+    assert page._sync_dir_card.isHidden()
+    assert not page._webdav_card.isHidden()
+    assert page._webdav_card._url.text() == "https://dav.example/"
+    assert page._webdav_card._user.text() == "alice"
+
+    # Switching back to folder flips the visibility.
+    page._on_sync_backend_changed("folder")
+    assert not page._sync_dir_card.isHidden()
+    assert page._webdav_card.isHidden()
+
+
 def test_auto_backup_wiring(qtbot, cfg):
     from app.ui.main_window import MainWindow
 

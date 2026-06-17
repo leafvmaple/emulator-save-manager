@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QSizePolicy, QLabel,
 )
@@ -19,7 +19,7 @@ from qfluentwidgets import (
     RangeSettingCard, SwitchSettingCard, FluentIcon as FIF,
     InfoBar, InfoBarPosition, setTheme, Theme,
     CardWidget, SmoothScrollArea, IconWidget, setFont,
-    TransparentToolButton,
+    TransparentToolButton, LineEdit, PasswordLineEdit, PushButton,
 )
 from qfluentwidgets import (
     ConfigItem, OptionsConfigItem, RangeConfigItem,
@@ -63,6 +63,9 @@ class _AppQConfig(QConfig):
     auto_backup_interval = RangeConfigItem(
         "Backup", "AutoBackupInterval", 0, RangeValidator(0, 180),
     )
+    sync_backend = OptionsConfigItem(
+        "Sync", "Backend", "folder", OptionsValidator(["folder", "webdav"]),
+    )
 
 
 _app_qconfig = _AppQConfig()
@@ -104,6 +107,137 @@ class _AboutCard(CardWidget):
         col.addWidget(desc)
 
         root.addLayout(col, 1)
+
+
+class _WebDavTestWorker(QThread):
+    """Runs a WebDAV connection test off the UI thread."""
+
+    done = Signal(bool, str)
+
+    def __init__(self, backend, parent: QWidget | None = None) -> None:  # noqa: ANN001
+        super().__init__(parent)
+        self._backend = backend
+
+    def run(self) -> None:
+        try:
+            ok, msg = self._backend.test_connection()
+        except Exception as e:  # noqa: BLE001
+            ok, msg = False, str(e)
+        self.done.emit(ok, msg)
+
+
+class _WebDavCard(CardWidget):
+    """WebDAV connection settings: URL / username / password / base path + test."""
+
+    def __init__(self, config, parent: QWidget | None = None) -> None:  # noqa: ANN001
+        super().__init__(parent)
+        self._config = config
+        self._worker: _WebDavTestWorker | None = None
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 16, 20, 16)
+        root.setSpacing(10)
+
+        title = StrongBodyLabel("WebDAV", self)
+        setFont(title, 14, QFont.Weight.DemiBold)
+        root.addWidget(title)
+
+        hint = CaptionLabel(t("settings.webdav_hint"), self)
+        hint.setStyleSheet("color:#888;")
+        hint.setWordWrap(True)
+        root.addWidget(hint)
+
+        self._url = LineEdit(self)
+        self._url.setPlaceholderText("https://dav.jianguoyun.com/dav/")
+        self._user = LineEdit(self)
+        self._pw = PasswordLineEdit(self)
+        self._base = LineEdit(self)
+        self._base.setPlaceholderText(t("settings.webdav_base_optional"))
+
+        for label, widget in (
+            (t("settings.webdav_url"), self._url),
+            (t("settings.webdav_username"), self._user),
+            (t("settings.webdav_password"), self._pw),
+            (t("settings.webdav_base"), self._base),
+        ):
+            row = QHBoxLayout()
+            row.setSpacing(10)
+            cap = CaptionLabel(label, self)
+            cap.setFixedWidth(96)
+            row.addWidget(cap)
+            row.addWidget(widget, 1)
+            root.addLayout(row)
+
+        test_row = QHBoxLayout()
+        test_row.setSpacing(10)
+        self._test_btn = PushButton(FIF.LINK, t("settings.webdav_test"), self)
+        self._test_btn.setFixedWidth(130)
+        self._test_btn.clicked.connect(self._on_test)
+        test_row.addWidget(self._test_btn)
+        self._status = CaptionLabel("", self)
+        test_row.addWidget(self._status)
+        test_row.addStretch()
+        root.addLayout(test_row)
+
+        self._load()
+        self._url.editingFinished.connect(
+            lambda: self._save("webdav_url", self._url.text().strip())
+        )
+        self._user.editingFinished.connect(
+            lambda: self._save("webdav_username", self._user.text().strip())
+        )
+        self._base.editingFinished.connect(
+            lambda: self._save("webdav_base_path", self._base.text().strip())
+        )
+        self._pw.editingFinished.connect(self._save_password)
+
+    def set_config(self, config) -> None:  # noqa: ANN001
+        self._config = config
+        self._load()
+
+    def _load(self) -> None:
+        if self._config is None:
+            return
+        self._url.setText(self._config.webdav_url)
+        self._user.setText(self._config.webdav_username)
+        self._base.setText(self._config.webdav_base_path)
+        from app.core.credentials import get_webdav_password
+        self._pw.setText(get_webdav_password())
+
+    def _save(self, key: str, value: str) -> None:
+        if self._config is not None:
+            self._config.set(key, value)
+
+    def _save_password(self) -> None:
+        from app.core.credentials import set_webdav_password
+        set_webdav_password(self._pw.text())
+
+    def _on_test(self) -> None:
+        from app.core.sync_backend import WebDavBackend
+        # Persist current values first so a test uses what the user typed.
+        self._save("webdav_url", self._url.text().strip())
+        self._save("webdav_username", self._user.text().strip())
+        self._save("webdav_base_path", self._base.text().strip())
+        self._save_password()
+        backend = WebDavBackend(
+            self._url.text().strip(), self._user.text().strip(),
+            self._pw.text(), self._base.text().strip(),
+        )
+        self._test_btn.setEnabled(False)
+        self._status.setText(t("settings.webdav_testing"))
+        self._status.setStyleSheet("color:#888;")
+        self._worker = _WebDavTestWorker(backend, self)
+        self._worker.done.connect(self._on_test_done)
+        self._worker.start()
+
+    def _on_test_done(self, ok: bool, msg: str) -> None:
+        self._test_btn.setEnabled(True)
+        if ok:
+            self._status.setText("✓ " + t("settings.webdav_ok"))
+            self._status.setStyleSheet("color:#107c10;")
+        else:
+            self._status.setText("✗ " + (msg or "failed"))
+            self._status.setStyleSheet("color:#c42b1c;")
 
 
 class _EmulatorPathCard(CardWidget):
@@ -389,6 +523,16 @@ class SettingsPage(QWidget):
         # --- Sync group ---
         sync_group = SettingCardGroup(t("settings.sync_group"), container)
 
+        self._sync_method_card = ComboBoxSettingCard(
+            _app_qconfig.sync_backend,
+            FIF.CLOUD,
+            t("settings.sync_method"),
+            t("settings.sync_method_desc"),
+            texts=[t("settings.sync_method_folder"), t("settings.sync_method_webdav")],
+            parent=sync_group,
+        )
+        sync_group.addSettingCard(self._sync_method_card)
+
         self._sync_dir_card = PushSettingCard(
             t("settings.choose_dir"),
             FIF.SYNC,
@@ -398,6 +542,9 @@ class SettingsPage(QWidget):
         )
         self._sync_dir_card.clicked.connect(self._choose_sync_dir)
         sync_group.addSettingCard(self._sync_dir_card)
+
+        self._webdav_card = _WebDavCard(self._config, sync_group)
+        sync_group.addSettingCard(self._webdav_card)
 
         self._auto_scan_card = SwitchSettingCard(
             FIF.SEARCH,
@@ -454,6 +601,16 @@ class SettingsPage(QWidget):
         _app_qconfig.auto_backup_interval.valueChanged.connect(
             lambda v: self._save("auto_backup_interval_minutes", v)
         )
+        _app_qconfig.sync_backend.valueChanged.connect(self._on_sync_backend_changed)
+
+    def _on_sync_backend_changed(self, value: str) -> None:
+        self._save("sync_backend", value)
+        self._update_sync_visibility(value)
+
+    def _update_sync_visibility(self, backend: str) -> None:
+        is_webdav = backend == "webdav"
+        self._sync_dir_card.setVisible(not is_webdav)
+        self._webdav_card.setVisible(is_webdav)
 
     # ------------------------------------------------------------------
     # Sync config → UI
@@ -475,6 +632,11 @@ class SettingsPage(QWidget):
         _app_qconfig.auto_sync.value = self._config.auto_sync_on_start
         _app_qconfig.auto_backup.value = self._config.auto_backup_on_start
         _app_qconfig.auto_backup_interval.value = self._config.auto_backup_interval_minutes
+
+        # Sync backend selection + WebDAV fields.
+        _app_qconfig.sync_backend.value = self._config.sync_backend
+        self._webdav_card.set_config(self._config)
+        self._update_sync_visibility(self._config.sync_backend)
 
     # ------------------------------------------------------------------
     # Handlers
