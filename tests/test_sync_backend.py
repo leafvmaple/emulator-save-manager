@@ -58,6 +58,23 @@ class FakeWebDavClient:
         return datetime.now()
 
 
+class NutstoreLikeClient(FakeWebDavClient):
+    """Like FakeWebDavClient, but PROPFIND on a missing path raises 409 (as
+    Nutstore/坚果云 does) instead of behaving like a 404."""
+
+    def exists(self, p: str) -> bool:
+        p = self._n(p)
+        if p == "" or p in self.store or any(k.startswith(p + "/") for k in self.store):
+            return True
+        raise RuntimeError("409 Conflict")
+
+    def ls(self, p: str, detail: bool = False):
+        n = self._n(p)
+        if n and n not in self.store and not any(k.startswith(n + "/") for k in self.store):
+            raise RuntimeError("404 Not Found")
+        return super().ls(p, detail)
+
+
 @dataclass
 class _Cfg:
     backup_path: Path
@@ -117,6 +134,45 @@ def test_webdav_backend_not_configured_without_url():
     assert not b.is_configured
     ok, msg = b.test_connection()
     assert ok is False and msg
+
+
+# --- Nutstore-like server: PROPFIND-on-missing returns 409 (the reported bug) ---
+
+def test_webdav_exists_swallows_propfind_409():
+    b = WebDavBackend("http://x", "u", "p", client=NutstoreLikeClient())
+    assert b.exists("not/there.zip") is False   # 409 must not propagate
+
+
+def test_webdav_write_creates_dirs_despite_409():
+    b = WebDavBackend("http://x", "u", "p", client=NutstoreLikeClient())
+    # Must not gate dir creation on exists() (which 409s on a missing path).
+    b.write_bytes("PCSX2/SLUS-1/2020.zip", b"DATA")
+    assert b.read_bytes("PCSX2/SLUS-1/2020.zip") == b"DATA"
+
+
+def test_webdav_test_connection_probes_root_not_missing_path():
+    # The root exists, so the test must pass even though deep paths 409.
+    b = WebDavBackend("http://x", "u", "p", client=NutstoreLikeClient())
+    ok, msg = b.test_connection()
+    assert ok is True, msg
+
+
+def test_full_sync_over_nutstore_like_backend(tmp_path, make_game_save):
+    client = NutstoreLikeClient()
+
+    def machine(name):
+        c = _Cfg(backup_path=tmp_path / f"{name}_b", machine_id=name)
+        bm = BackupManager(c)
+        sm = SyncManager(c, bm, backend=WebDavBackend("http://x", "u", "p", client=client))
+        return bm, sm
+
+    bmA, smA = machine("A")
+    bmB, smB = machine("B")
+    bmA.create_backup([make_game_save(tmp_path / "sa", files={"x.bin": b"HELLO"})])
+
+    assert smA.push_all().pushed == 1               # dirs created despite 409s
+    assert smB.pull_all().pulled == 1
+    assert "PCSX2:SLUS-12345" in bmB.list_all_backups()
 
 
 # ----------------------------------------------------------------------

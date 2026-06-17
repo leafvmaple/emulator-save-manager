@@ -230,6 +230,10 @@ class WebDavBackend(SyncBackend):
         c.upload_fileobj(io.BytesIO(data), path, overwrite=True)
 
     def _ensure_parent(self, remote_path: str) -> None:
+        # Create each ancestor collection top-down via MKCOL, ignoring errors.
+        # We must NOT gate on exists(): some servers (e.g. Nutstore/坚果云)
+        # answer PROPFIND on a missing path with 409, which webdav4 re-raises —
+        # so an exists()-first check would skip mkdir and the dir is never made.
         if "/" not in remote_path:
             return
         parent = remote_path.rsplit("/", 1)[0]
@@ -238,9 +242,8 @@ class WebDavBackend(SyncBackend):
         for seg in parent.split("/"):
             cur = f"{cur}/{seg}" if cur else seg
             try:
-                if not c.exists(cur):
-                    c.mkdir(cur)
-            except Exception:  # noqa: BLE001 - dir may already exist / race
+                c.mkdir(cur)
+            except Exception:  # noqa: BLE001 - already exists (405) / created above
                 pass
 
     def delete(self, rel: str) -> None:
@@ -270,8 +273,11 @@ class WebDavBackend(SyncBackend):
         if c is None:
             return (False, self._client_err or "Could not create WebDAV client")
         try:
-            base = "/".join(p for p in [self._base, SYNC_ROOT_DIR] if p)
-            c.exists(base)   # a real request (PROPFIND) — validates URL + auth
+            # PROPFIND the server root — it always exists, so this validates the
+            # URL + credentials. Probing a not-yet-created deep path (the base
+            # path is created on first push) would 409 on servers like Nutstore
+            # (PROPFIND-on-missing), which is the bug this avoids.
+            c.ls("", detail=False)
             return (True, "OK")
         except Exception as e:  # noqa: BLE001
             return (False, str(e))
