@@ -1,3 +1,22 @@
+# v0.8.0
+
+Released on 2026-06-17
+
+## ✨ Features
+
+- feat(settings): WebDAV sync configuration UI (`8f5d8f5`)
+- feat(sync): pluggable sync backends — add WebDAV (core + tests) (`5d80d69`)
+
+## 🐛 Bug Fixes
+
+- fix: About shows the real version (read VERSION file, not hard-coded 0.1.0) (`d97710f`)
+
+## 📦 Other Changes
+
+- build: bundle webdav4 + keyring; selftest verifies them (`d6c7a8a`)
+
+---
+
 # v0.7.2
 
 Released on 2026-06-17
