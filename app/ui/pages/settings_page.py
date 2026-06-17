@@ -192,6 +192,11 @@ class _WebDavCard(CardWidget):
         )
         self._pw.editingFinished.connect(self._save_password)
 
+        # Custom cards in a SettingCardGroup don't auto-size from their content,
+        # so give a fixed height that fits all fields + a multi-line hint
+        # (English wraps to ~3 lines).
+        self.setFixedHeight(330)
+
     def set_config(self, config) -> None:  # noqa: ANN001
         self._config = config
         self._load()
