@@ -22,3 +22,4 @@ logs/
 RELEASE_NOTES.md
 selftest_result.txt
 build.log
+*.spec
