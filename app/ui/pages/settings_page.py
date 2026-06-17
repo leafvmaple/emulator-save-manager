@@ -98,7 +98,8 @@ class _AboutCard(CardWidget):
         setFont(name, 15, QFont.Weight.DemiBold)
         col.addWidget(name)
 
-        ver = CaptionLabel(f"v{t('app.version')}", self)
+        from app.version import get_app_version
+        ver = CaptionLabel(f"v{get_app_version()}", self)
         ver.setStyleSheet("color:#888;")
         col.addWidget(ver)
 

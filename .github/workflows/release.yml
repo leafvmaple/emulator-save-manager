@@ -244,6 +244,7 @@ jobs:
             --collect-data app.i18n \
             --collect-all keyring \
             --collect-submodules webdav4 \
+            --add-data "VERSION${{ runner.os == 'Windows' && ';' || ':' }}." \
             main.py 2>&1 | tee build.log
           # Guard: fail loudly if data collection was skipped.
           if grep -qiE "skipping data collection|Unable to find package" build.log; then

@@ -1,7 +1,6 @@
 {
     "app": {
-        "name": "Emulator Save Manager",
-        "version": "0.1.0"
+        "name": "Emulator Save Manager"
     },
     "nav": {
         "scan": "Scan",
