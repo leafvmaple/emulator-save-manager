@@ -1,3 +1,13 @@
+# v0.7.2
+
+Released on 2026-06-17
+
+## 🐛 Bug Fixes
+
+- fix: release binaries were hollow — bundle i18n + plugins correctly (`1c72ad6`)
+
+---
+
 # v0.7.1
 
 Released on 2026-06-16
