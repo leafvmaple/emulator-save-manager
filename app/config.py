@@ -33,6 +33,10 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "auto_sync_on_start": False,
     "auto_backup_on_start": False,
     "auto_backup_interval_minutes": 0,
+    "sync_backend": "folder",          # "folder" | "webdav"
+    "webdav_url": "",
+    "webdav_username": "",
+    "webdav_base_path": "",
 }
 
 
@@ -114,6 +118,22 @@ class Config:
             return max(0, int(self._data.get("auto_backup_interval_minutes", 0)))
         except (TypeError, ValueError):
             return 0
+
+    @property
+    def sync_backend(self) -> str:
+        return self._data.get("sync_backend", "folder")
+
+    @property
+    def webdav_url(self) -> str:
+        return self._data.get("webdav_url", "")
+
+    @property
+    def webdav_username(self) -> str:
+        return self._data.get("webdav_username", "")
+
+    @property
+    def webdav_base_path(self) -> str:
+        return self._data.get("webdav_base_path", "")
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)

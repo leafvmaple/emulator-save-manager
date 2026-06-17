@@ -98,6 +98,7 @@ def machine_factory(tmp_path):
     """
     from app.core.backup import BackupManager
     from app.core.sync import SyncManager
+    from app.core.sync_backend import LocalFolderBackend
 
     def _make(name: str, sync_folder: Path):
         cfg = FakeConfig(
@@ -106,7 +107,7 @@ def machine_factory(tmp_path):
             machine_id=name,
         )
         bm = BackupManager(cfg)
-        sm = SyncManager(cfg, bm)
+        sm = SyncManager(cfg, bm, backend=LocalFolderBackend(Path(sync_folder)))
         return cfg, bm, sm
 
     return _make

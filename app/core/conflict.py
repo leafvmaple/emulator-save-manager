@@ -35,6 +35,9 @@ class ConflictInfo:
     local_hash: str
     remote_hash: str
     remote_machine: str = ""
+    remote_rel: str = ""
+    """Backend-relative path of the remote zip (used to apply resolutions
+    through a SyncBackend rather than a local filesystem path)."""
 
     @property
     def is_real_conflict(self) -> bool:
@@ -55,6 +58,15 @@ def file_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _zip_content_hash_from(zf: zipfile.ZipFile) -> str:
+    h = hashlib.sha256()
+    for name in sorted(zf.namelist()):
+        h.update(name.encode("utf-8"))
+        h.update(b"\x00")
+        h.update(zf.read(name))
+    return h.hexdigest()
+
+
 def zip_content_hash(zip_path: Path) -> str:
     """Compute a SHA-256 over a ZIP's *decompressed content* only.
 
@@ -64,17 +76,28 @@ def zip_content_hash(zip_path: Path) -> str:
     when they were created at different times — which is exactly what
     sync needs to tell "same content" from "real conflict".
     """
-    h = hashlib.sha256()
     try:
         with zipfile.ZipFile(zip_path, "r") as zf:
-            for name in sorted(zf.namelist()):
-                h.update(name.encode("utf-8"))
-                h.update(b"\x00")
-                h.update(zf.read(name))
+            return _zip_content_hash_from(zf)
     except Exception as e:
         logger.debug("Zip content hash failed for {}: {}", zip_path, e)
         return ""
-    return h.hexdigest()
+
+
+def zip_content_hash_bytes(data: bytes) -> str:
+    """Like :func:`zip_content_hash` but for in-memory ZIP bytes (remote files)."""
+    import io
+    try:
+        with zipfile.ZipFile(io.BytesIO(data), "r") as zf:
+            return _zip_content_hash_from(zf)
+    except Exception as e:
+        logger.debug("Zip content hash (bytes) failed: {}", e)
+        return ""
+
+
+def sha256_bytes(data: bytes) -> str:
+    """SHA-256 of raw bytes."""
+    return hashlib.sha256(data).hexdigest()
 
 
 def dir_sha256(dir_path: Path) -> str:
