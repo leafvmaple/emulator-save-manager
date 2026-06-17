@@ -1,3 +1,18 @@
+# v0.8.1
+
+Released on 2026-06-17
+
+## 🐛 Bug Fixes
+
+- fix(sync): WebDAV test-connection 409 on Nutstore (+ dir creation) (`4a2fb0a`)
+- fix(settings): WebDAV card was collapsed in the SettingCardGroup (`d0d031d`)
+
+## 📦 Other Changes
+
+- chore: stop tracking the generated PyInstaller .spec (`b1ff460`)
+
+---
+
 # v0.8.0
 
 Released on 2026-06-17
