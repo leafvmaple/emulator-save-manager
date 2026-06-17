@@ -242,6 +242,8 @@ jobs:
             --collect-submodules app.plugins \
             --collect-data app.plugins \
             --collect-data app.i18n \
+            --collect-all keyring \
+            --collect-submodules webdav4 \
             main.py 2>&1 | tee build.log
           # Guard: fail loudly if data collection was skipped.
           if grep -qiE "skipping data collection|Unable to find package" build.log; then
