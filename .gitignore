@@ -20,3 +20,5 @@ logs/
 *.log
 .pytest_cache/
 RELEASE_NOTES.md
+selftest_result.txt
+build.log

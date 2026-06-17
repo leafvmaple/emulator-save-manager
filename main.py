@@ -36,6 +36,14 @@ def main() -> None:
     pm.discover()
     logger.info("Plugins loaded: {}", [p.name for p in pm.get_all_plugins()])
 
+    # ---- Self-test: verify bundled resources actually loaded ----
+    # A packaging mistake can produce a binary that launches but has no
+    # translations or plugins (see app/i18n + app/plugins collection). The
+    # release workflow runs `--selftest` against the built binary and fails
+    # the build if this returns non-zero, so a hollow build never ships.
+    if "--selftest" in sys.argv:
+        _selftest(pm)
+
     # ---- 5. Core services ----
     scanner = Scanner(pm, config)
     backup_mgr = BackupManager(config)
@@ -83,6 +91,32 @@ def main() -> None:
         window.sync_page.start_sync()
 
     sys.exit(app.exec())
+
+
+def _selftest(pm: "PluginManager") -> None:
+    """Verify bundled resources loaded, then exit (0 = OK, 1 = broken).
+
+    Writes the result to the path following ``--selftest`` (or
+    ``selftest_result.txt``) so a windowed build with no stdout can still be
+    checked by CI.
+    """
+    from app.i18n import t
+
+    i18n_ok = t("scan.title") != "scan.title"   # real translation, not the key
+    plugin_count = len(pm.get_all_plugins())
+    ok = i18n_ok and plugin_count > 0
+    result = "OK" if ok else f"FAIL i18n={i18n_ok} plugins={plugin_count}"
+
+    out = "selftest_result.txt"
+    idx = sys.argv.index("--selftest")
+    if idx + 1 < len(sys.argv):
+        out = sys.argv[idx + 1]
+    try:
+        Path(out).write_text(result, encoding="utf-8")
+    except OSError:
+        pass
+    logger.info("Selftest: {}", result)
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == "__main__":

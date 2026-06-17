@@ -228,10 +228,13 @@ jobs:
       - name: Build with PyInstaller
         shell: bash
         run: |
-          # Plugins are loaded dynamically via importlib, so PyInstaller's
-          # static analysis can't see them — collect every submodule AND the
-          # bundled data files (game_names.json, icon.png) for all plugins.
-          pyinstaller \
+          # Plugins/i18n load dynamically, so PyInstaller's static analysis
+          # can't see them — collect their submodules + data files explicitly.
+          # MUST use `python -m PyInstaller` (not bare `pyinstaller`) so the
+          # repo root is on sys.path and `app.*` is importable; otherwise
+          # collect-* silently skips everything and ships a hollow binary
+          # (no translations, no plugins).
+          python -m PyInstaller \
             --noconfirm \
             --onefile \
             --windowed \
@@ -239,7 +242,12 @@ jobs:
             --collect-submodules app.plugins \
             --collect-data app.plugins \
             --collect-data app.i18n \
-            main.py
+            main.py 2>&1 | tee build.log
+          # Guard: fail loudly if data collection was skipped.
+          if grep -qiE "skipping data collection|Unable to find package" build.log; then
+            echo "::error::PyInstaller skipped app data collection — binary would be hollow."
+            exit 1
+          fi
 
       - name: Prepare artifact
         shell: bash
@@ -251,6 +259,21 @@ jobs:
             cp dist/EmulatorSaveManager release/${{ matrix.artifact_name }}
             chmod +x release/${{ matrix.artifact_name }}
           fi
+
+      - name: Smoke-test the binary (resources bundled)
+        shell: bash
+        run: |
+          # The binary self-checks that i18n + plugins actually loaded and
+          # writes the result to a file (windowed builds have no stdout),
+          # exiting before any GUI. Fail the build if it isn't "OK".
+          rm -f selftest_result.txt
+          "./release/${{ matrix.artifact_name }}${{ matrix.ext }}" --selftest selftest_result.txt &
+          for i in $(seq 1 30); do
+            [ -f selftest_result.txt ] && break
+            sleep 1
+          done
+          echo "selftest result: $(cat selftest_result.txt 2>/dev/null || echo MISSING)"
+          grep -qx OK selftest_result.txt
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
