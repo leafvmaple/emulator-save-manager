@@ -1,3 +1,13 @@
+# v0.8.3
+
+Released on 2026-06-18
+
+## 🐛 Bug Fixes
+
+- fix(pcsx2): recognize file-based memory cards (Mcd001.ps2) (`3052d58`)
+
+---
+
 # v0.8.2
 
 Released on 2026-06-18
