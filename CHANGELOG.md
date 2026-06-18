@@ -1,3 +1,13 @@
+# v0.8.2
+
+Released on 2026-06-18
+
+## 🐛 Bug Fixes
+
+- fix(sync): switching sync method at runtime had no effect (`3c2e0de`)
+
+---
+
 # v0.8.1
 
 Released on 2026-06-17
