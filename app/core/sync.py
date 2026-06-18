@@ -63,7 +63,15 @@ class SyncManager:
     ) -> None:
         self._cfg = config
         self._bm = backup_manager
+        # When a backend is injected (tests) it's fixed; otherwise it's rebuilt
+        # from config before each operation so changing the sync method / WebDAV
+        # settings at runtime takes effect without an app restart.
+        self._injected = backend
         self._backend = backend if backend is not None else make_backend(config)
+
+    def _refresh_backend(self) -> None:
+        if self._injected is None:
+            self._backend = make_backend(self._cfg)
 
     @property
     def backend(self) -> SyncBackend:
@@ -71,6 +79,7 @@ class SyncManager:
 
     @property
     def is_configured(self) -> bool:
+        self._refresh_backend()
         return self._backend.is_configured
 
     # ------------------------------------------------------------------
@@ -80,7 +89,7 @@ class SyncManager:
     def push(self, emulator: str, game_id: str) -> SyncResult:
         """Push the latest local backup for a game to the remote."""
         result = SyncResult()
-        if not self.is_configured:
+        if not self._backend.is_configured:  # backend already resolved by caller
             result.errors.append("Sync not configured")
             return result
 
@@ -146,7 +155,7 @@ class SyncManager:
     def pull(self, emulator: str, game_id: str) -> SyncResult:
         """Pull the latest remote backup for a game to local storage."""
         result = SyncResult()
-        if not self.is_configured:
+        if not self._backend.is_configured:  # backend already resolved by caller
             result.errors.append("Sync not configured")
             return result
 

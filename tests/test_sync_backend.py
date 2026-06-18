@@ -187,6 +187,27 @@ def test_make_backend_selects_implementation(cfg):
     assert isinstance(make_backend(cfg), WebDavBackend)
 
 
+def test_sync_manager_picks_up_backend_change_at_runtime(cfg, tmp_path):
+    # Switching the sync method in settings must take effect without a restart.
+    cfg.set("sync_folder", str(tmp_path))
+    sm = SyncManager(cfg, BackupManager(cfg))
+    assert isinstance(sm._backend, LocalFolderBackend)
+
+    cfg.set("sync_backend", "webdav")
+    cfg.set("webdav_url", "http://dav.example")
+    cfg.set("webdav_username", "u")
+    _ = sm.is_configured            # resolves the backend from current config
+    assert isinstance(sm._backend, WebDavBackend)
+
+
+def test_injected_backend_is_not_replaced(cfg, tmp_path):
+    backend = LocalFolderBackend(tmp_path)
+    sm = SyncManager(cfg, BackupManager(cfg), backend=backend)
+    cfg.set("sync_backend", "webdav")
+    _ = sm.is_configured
+    assert sm._backend is backend  # injected backends stay fixed (tests)
+
+
 # ----------------------------------------------------------------------
 # End-to-end sync over a WebDAV-style backend
 # ----------------------------------------------------------------------
