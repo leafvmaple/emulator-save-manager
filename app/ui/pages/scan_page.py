@@ -13,7 +13,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QThread, QPoint
+from PySide6.QtCore import Qt, Signal, QThread, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QPixmap
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
@@ -372,17 +372,37 @@ class _GameSaveCard(CardWidget):
 
         outer.addWidget(self._detail_widget)
 
+        # Height animation for a smooth expand / collapse of the detail area.
+        self._detail_anim = QPropertyAnimation(self._detail_widget, b"maximumHeight", self)
+        self._detail_anim.setDuration(170)
+        self._detail_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._detail_anim.finished.connect(self._on_detail_anim_finished)
+
     # -- Expand / collapse --
 
     def _toggle_expand(self) -> None:
         self._expanded = not self._expanded
-        self._detail_widget.setVisible(self._expanded)
+        self._detail_anim.stop()
         if self._expanded:
+            self._detail_widget.setVisible(True)
+            self._detail_widget.setMaximumHeight(0)
+            self._detail_anim.setStartValue(0)
+            self._detail_anim.setEndValue(self._detail_widget.sizeHint().height())
+            self._detail_anim.start()
             self._expand_btn.setIcon(FIF.CHEVRON_DOWN_MED)
             self._expand_btn.setToolTip(t("scan.hide_files"))
         else:
+            self._detail_anim.setStartValue(self._detail_widget.height())
+            self._detail_anim.setEndValue(0)
+            self._detail_anim.start()
             self._expand_btn.setIcon(FIF.CHEVRON_RIGHT)
             self._expand_btn.setToolTip(t("scan.show_files"))
+
+    def _on_detail_anim_finished(self) -> None:
+        if self._expanded:
+            self._detail_widget.setMaximumHeight(16777215)  # unconstrain after expand
+        else:
+            self._detail_widget.setVisible(False)
 
     def _set_fallback_icon(self, label_text: str) -> None:
         """Show a deterministic letter-avatar when there's no cover art."""
