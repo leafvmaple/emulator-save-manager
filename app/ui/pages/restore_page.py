@@ -37,7 +37,6 @@ from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
 from app.ui.components.empty_state import EmptyState
 from app.ui.components.avatar import letter_avatar
-from app.ui.components.elevation import add_hover_elevation
 
 
 class _RestoreWorker(QThread):
@@ -429,7 +428,6 @@ class _GameBackupCard(CardWidget):
         self._records = records
         self._expanded = False
         self._version_cards: list[_VersionCard] = []
-        add_hover_elevation(self)
 
         main = QVBoxLayout(self)
         main.setContentsMargins(20, 12, 20, 12)

@@ -21,7 +21,6 @@ from app.version import get_app_version
 from app.assets import app_icon_path
 from app.core.game_icon import get_plugin_icon
 from app.ui import theme
-from app.ui.components.elevation import add_hover_elevation
 
 RECENT_LIMIT = 6
 
@@ -64,7 +63,6 @@ class _ActionCard(CardWidget):
         super().__init__(parent)
         self.setFixedHeight(76)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        add_hover_elevation(self)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(theme.GAP_LG, theme.GAP_MD, theme.GAP_LG, theme.GAP_MD)
         lay.setSpacing(theme.GAP_MD)
@@ -97,7 +95,6 @@ class _RecentRow(CardWidget):
         super().__init__(parent)
         self.setFixedHeight(56)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        add_hover_elevation(self, hover_blur=18, dy=3)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(theme.GAP_LG, theme.GAP_SM, theme.GAP_LG, theme.GAP_SM)
         lay.setSpacing(theme.GAP_MD)
