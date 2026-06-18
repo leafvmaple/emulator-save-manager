@@ -1,3 +1,21 @@
+# v0.9.1
+
+Released on 2026-06-18
+
+## ✨ Features
+
+- feat(scan): show loading skeletons while scanning (`a201704`)
+- feat(ui): letter-avatar placeholders for games without cover art (`e76eaf7`)
+- feat(home): add a recent-backups list to the dashboard (`1ceba7e`)
+- feat(ui): add application icon (window, taskbar, exe) and Home logo (`03865d0`)
+
+## 🐛 Bug Fixes
+
+- fix(ui): even out the card-list vertical rhythm (`0902046`)
+- fix(home): enlarge hero logo to match the title block (`4a8557a`)
+
+---
+
 # v0.9.0
 
 Released on 2026-06-18
