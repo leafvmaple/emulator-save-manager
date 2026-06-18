@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 )
 from qfluentwidgets import (
-    SubtitleLabel, BodyLabel, CaptionLabel, PrimaryPushButton, PushButton,
-    CardWidget, FluentIcon as FIF, InfoBar, InfoBarPosition,
-    ProgressRing, setFont,
+    SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
+    PrimaryPushButton, PushButton, CardWidget, IconWidget,
+    FluentIcon as FIF, InfoBar, InfoBarPosition, ProgressRing, setFont,
 )
-from loguru import logger
 
 from app.i18n import t
 from app.core.sync import SyncResult
@@ -110,19 +109,31 @@ class SyncPage(QWidget):
 
         layout.addWidget(PageHeader(t("sync.title"), t("sync.description"), self))
 
-        # Status card
+        # Status card — connection method / target / machine, with a status pill
         self._status_card = CardWidget(self)
-        self._status_card.setFixedHeight(120)
-        status_layout = QVBoxLayout(self._status_card)
-        status_layout.setContentsMargins(20, 16, 20, 16)
+        card_lay = QVBoxLayout(self._status_card)
+        card_lay.setContentsMargins(20, 16, 20, 16)
+        card_lay.setSpacing(theme.GAP_SM)
 
-        self._sync_folder_label = BodyLabel(t("sync.not_configured"), self._status_card)
-        self._machine_id_label = CaptionLabel("", self._status_card)
-        self._last_sync_label = CaptionLabel("", self._status_card)
+        head = QHBoxLayout()
+        head.setSpacing(theme.GAP_SM)
+        ic = IconWidget(FIF.SYNC, self._status_card)
+        ic.setFixedSize(18, 18)
+        head.addWidget(ic, 0, Qt.AlignmentFlag.AlignVCenter)
+        head.addWidget(StrongBodyLabel(t("sync.status_title"), self._status_card),
+                       0, Qt.AlignmentFlag.AlignVCenter)
+        head.addStretch()
+        self._status_badge = QLabel(self._status_card)
+        self._status_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._status_badge.setFixedHeight(20)
+        setFont(self._status_badge, 11)
+        head.addWidget(self._status_badge, 0, Qt.AlignmentFlag.AlignVCenter)
+        card_lay.addLayout(head)
 
-        status_layout.addWidget(self._sync_folder_label)
-        status_layout.addWidget(self._machine_id_label)
-        status_layout.addWidget(self._last_sync_label)
+        self._method_value = self._info_row(card_lay, t("sync.method"))
+        self._target_value = self._info_row(card_lay, t("sync.target"))
+        self._machine_value = self._info_row(card_lay, t("sync.machine_id"))
+        self._set_status_badge(False)
         layout.addWidget(self._status_card)
 
         # Action buttons
@@ -174,15 +185,48 @@ class SyncPage(QWidget):
     # Status
     # ------------------------------------------------------------------
 
+    def _info_row(self, parent_layout, label_text: str) -> BodyLabel:  # noqa: ANN001
+        row = QHBoxLayout()
+        row.setSpacing(theme.GAP_SM)
+        lbl = CaptionLabel(label_text, self._status_card)
+        lbl.setStyleSheet(f"color:{theme.text_muted()};")
+        lbl.setFixedWidth(64)
+        row.addWidget(lbl, 0, Qt.AlignmentFlag.AlignTop)
+        value = BodyLabel("—", self._status_card)
+        value.setWordWrap(True)
+        row.addWidget(value, 1)
+        parent_layout.addLayout(row)
+        return value
+
+    def _set_status_badge(self, ok: bool) -> None:
+        text = t("sync.configured") if ok else t("sync.unconfigured")
+        color = theme.status_fill("added") if ok else "#9a9a9a"
+        self._status_badge.setText(text)
+        w = max(48, self._status_badge.fontMetrics().horizontalAdvance(text) + 18)
+        self._status_badge.setFixedWidth(w)
+        self._status_badge.setStyleSheet(
+            f"background:{color}; color:{theme.on_accent()}; "
+            f"border-radius:{theme.RADIUS_PILL}px; padding:0 6px; font-weight:500;"
+        )
+
     def _refresh_status(self) -> None:
         if self._config is None:
             return
-        sf = self._config.sync_folder
-        if sf and sf.exists():
-            self._sync_folder_label.setText(f"{t('sync.sync_folder')}: {sf}")
+        if self._config.sync_backend == "webdav":
+            target = self._config.webdav_url
+            configured = bool(target)
+            method = t("settings.sync_method_webdav")
         else:
-            self._sync_folder_label.setText(t("sync.not_configured"))
-        self._machine_id_label.setText(f"{t('sync.machine_id')}: {self._config.machine_id}")
+            sf = self._config.sync_folder
+            configured = bool(sf) and str(sf) not in ("", ".") and sf.exists()
+            method = t("settings.sync_method_folder")
+            target = str(sf) if configured else ""
+
+        self._method_value.setText(method)
+        self._target_value.setText(target or "—")
+        self._target_value.setToolTip(target or "")
+        self._machine_value.setText(self._config.machine_id)
+        self._set_status_badge(configured)
 
     # ------------------------------------------------------------------
     # Actions
