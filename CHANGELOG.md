@@ -1,3 +1,17 @@
+# v1.0.2
+
+Released on 2026-06-18
+
+## ✨ Features
+
+- feat(restore): show save-state screenshots (`b463a6c`)
+
+## 📦 Other Changes
+
+- Add update checks and backup checkpoints (`7077936`)
+
+---
+
 # v1.0.1
 
 Released on 2026-06-18
