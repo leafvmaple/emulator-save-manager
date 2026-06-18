@@ -6,10 +6,6 @@ isn't lost.
 ## Post-1.0
 
 ### Polish
-- **First-run onboarding** — guide the user on first launch (no config, nothing
-  scanned yet). The Home dashboard currently shows `—` placeholders until the
-  first scan completes; a short welcome / "scan to get started" flow would read
-  better.
 - **README screenshots** — refresh them. The UI was substantially redesigned
   across the `0.x → 1.0` work (Fluent theming, Home dashboard, flat icon,
   timelines, etc.) and the docs' images are stale.

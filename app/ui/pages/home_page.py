@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QL
 from qfluentwidgets import (
     TitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
     CardWidget, SimpleCardWidget, IconWidget, SmoothScrollArea,
-    FluentIcon as FIF, setFont,
+    FluentIcon as FIF, PrimaryPushButton, setFont,
 )
 
 from app.i18n import t
@@ -86,6 +86,35 @@ class _ActionCard(CardWidget):
         chevron = IconWidget(FIF.CHEVRON_RIGHT, self)
         chevron.setFixedSize(14, 14)
         lay.addWidget(chevron, 0, Qt.AlignmentFlag.AlignVCenter)
+
+
+class _OnboardingCard(CardWidget):
+    """First-run prompt shown until a scan result is available."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(theme.GAP_LG, theme.GAP_MD, theme.GAP_LG, theme.GAP_MD)
+        lay.setSpacing(theme.GAP_MD)
+
+        icon = IconWidget(FIF.SEARCH, self)
+        icon.setFixedSize(28, 28)
+        lay.addWidget(icon, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(theme.GAP_XS)
+        text_col.setContentsMargins(0, 0, 0, 0)
+        title = StrongBodyLabel(t("home.welcome_title"), self)
+        setFont(title, 14, QFont.Weight.DemiBold)
+        text_col.addWidget(title)
+        desc = CaptionLabel(t("home.welcome_desc"), self)
+        desc.setStyleSheet(f"color:{theme.text_muted()};")
+        desc.setWordWrap(True)
+        text_col.addWidget(desc)
+        lay.addLayout(text_col, 1)
+
+        self.scan_btn = PrimaryPushButton(FIF.SEARCH, t("home.welcome_scan"), self)
+        lay.addWidget(self.scan_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
 
 class _RecentRow(CardWidget):
@@ -194,6 +223,10 @@ class HomePage(QWidget):
         hero.addLayout(hero_text, 1)
         page.addLayout(hero)
 
+        self._onboarding = _OnboardingCard(container)
+        self._onboarding.scan_btn.clicked.connect(lambda: self.scan_requested.emit())
+        page.addWidget(self._onboarding)
+
         # --- Overview stats ---
         page.addWidget(self._section_title(t("home.overview"), container))
         stats = QHBoxLayout()
@@ -205,6 +238,8 @@ class HomePage(QWidget):
         for c in (self._stat_emu, self._stat_saves, self._stat_backups, self._stat_sync):
             stats.addWidget(c, 1)
         page.addLayout(stats)
+        self._stat_emu.set_value(t("home.not_scanned"))
+        self._stat_saves.set_value(t("home.not_scanned"))
 
         # --- Quick actions ---
         page.addWidget(self._section_title(t("home.quick_actions"), container))
@@ -254,6 +289,7 @@ class HomePage(QWidget):
 
     def update_stats(self, emulators: list, saves: list) -> None:
         """Refresh emulator/save counts after a scan completes."""
+        self._onboarding.setVisible(False)
         self._stat_emu.set_value(len(emulators))
         games = {f"{s.emulator}:{s.game_id}" for s in saves}
         self._stat_saves.set_value(len(games))

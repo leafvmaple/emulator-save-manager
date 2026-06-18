@@ -81,6 +81,28 @@ def test_auto_backup_wiring(qtbot, cfg):
     assert w._auto_timer is None
 
 
+def test_home_first_run_onboarding_hides_after_scan(qtbot, cfg):
+    from app.ui.pages.home_page import HomePage
+    from app.models.emulator import EmulatorInfo
+    from app.models.game_save import GameSave
+
+    page = HomePage(cfg)
+    qtbot.addWidget(page)
+
+    assert not page._onboarding.isHidden()
+    assert page._stat_emu._value.text()
+    assert page._stat_saves._value.text()
+
+    page.update_stats(
+        [EmulatorInfo("PCSX2", Path("C:/p"), Path("C:/d"), supported_platforms=["PS2"])],
+        [GameSave("PCSX2", "Game", "SLPS-25733", platform="PS2")],
+    )
+
+    assert page._onboarding.isHidden()
+    assert page._stat_emu._value.text() == "1"
+    assert page._stat_saves._value.text() == "1"
+
+
 def test_auto_backup_worker_end_to_end(qtbot, cfg, make_game_save, tmp_path):
     """The background worker actually drives auto_backup_all and creates a backup."""
     from app.ui.pages.backup_page import _AutoBackupWorker

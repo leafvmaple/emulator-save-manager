@@ -20,13 +20,14 @@ from app.plugins.pcsx2.plugin import (
     _build_card_name,
     _scan_memcard_file,
     _scan_memcards_dir,
+    _scan_savestates,
 )
 
 
 def _make_ps2_card(
     tmp_path: Path,
     name: str = "Mcd001.ps2",
-    game_dir: str = "BISLPS-25733OGS",
+    game_dir: str | list[str] = "BISLPS-25733OGS",
 ) -> Path:
     """Build a minimal but structurally-valid 2-cluster PS2 memory card.
 
@@ -55,9 +56,12 @@ def _make_ps2_card(
         e[0x40:0x40 + len(nm)] = nm             # name field at 0x40
         return bytes(e)
 
+    game_dirs = [game_dir] if isinstance(game_dir, str) else game_dir
     dot = bytearray(direntry(0x8427, "."))
-    struct.pack_into("<I", dot, 4, 3)           # num_entries: ., .., game
-    root = bytes(dot) + direntry(0x8427, "..") + direntry(0x8427, game_dir)
+    struct.pack_into("<I", dot, 4, 2 + len(game_dirs))  # num_entries: ., .., games
+    root = bytes(dot) + direntry(0x8427, "..")
+    for dirname in game_dirs:
+        root += direntry(0x8427, dirname)
 
     p = tmp_path / name
     p.write_bytes(bytes(sb) + root)
@@ -69,7 +73,7 @@ def test_scan_file_card_is_one_whole_card_save(tmp_path):
     assert len(saves) == 1                       # whole card = one unit
     (s,) = saves
     assert s.emulator == "PCSX2" and s.platform == "PS2"
-    assert s.game_id == "Mcd001"                 # card-slot identity
+    assert s.game_id == "SLPS-25733"             # groups with save states
     assert "SLPS-25733" in s.game_name           # contained game surfaced
     assert s.save_files[0].save_type == SaveType.MEMCARD
     assert s.save_files[0].path.name == "Mcd001.ps2"
@@ -109,10 +113,30 @@ def test_scan_memcards_dir_dispatches_folder_and_file(tmp_path):
 
     saves = _scan_memcards_dir(tmp_path)
     ids = {s.game_id for s in saves}
-    assert "Mcd001" in ids        # whole file card
+    assert "SLPS-25733" in ids    # single-game file card groups by game
     assert "SLUS-21005" in ids    # per-game folder-card entry (separate dirs)
-    file_card = next(s for s in saves if s.game_id == "Mcd001")
+    file_card = next(s for s in saves if s.game_id == "SLPS-25733")
     assert "SLPS-25733" in file_card.game_name
+
+
+def test_single_game_file_card_groups_with_savestates(tmp_path):
+    card = _scan_memcard_file(_make_ps2_card(tmp_path))[0]
+    states_dir = tmp_path / "sstates"
+    states_dir.mkdir()
+    (states_dir / "SLPS-25733 (083F0E03).00.p2s").write_bytes(b"STATE")
+
+    state = _scan_savestates(states_dir)[0]
+
+    assert card.game_id == state.game_id == "SLPS-25733"
+    assert state.crc32 == "083F0E03"
+
+
+def test_multi_game_file_card_keeps_card_identity(tmp_path):
+    saves = _scan_memcard_file(_make_ps2_card(
+        tmp_path,
+        game_dir=["BISLPS-25733OGS", "BASLUS-21005INGS"],
+    ))
+    assert saves[0].game_id == "Mcd001"
 
 
 def test_unknown_extension_ignored(tmp_path):

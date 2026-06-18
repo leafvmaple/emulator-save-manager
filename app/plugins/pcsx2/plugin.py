@@ -272,10 +272,16 @@ def _scan_memcard_file(
         serials = _card_game_serials(raw, superblock)
 
     stat = memcard_path.stat()
+    game_id = memcard_path.stem
+    if len(serials) == 1 and _SERIAL_RE.fullmatch(serials[0]):
+        # A single-game card should group with that game's save states in the UI
+        # and backup flow. Multi-game cards stay keyed by the card slot because
+        # the whole image is still restored atomically.
+        game_id = serials[0]
     return [GameSave(
         emulator="PCSX2",
         game_name=_build_card_name(memcard_path.stem, serials, name_lookup),
-        game_id=memcard_path.stem,   # card-slot identity (stable across devices)
+        game_id=game_id,
         platform=platform_name,
         save_files=[SaveFile(
             path=memcard_path,
