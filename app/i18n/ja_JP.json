@@ -27,7 +27,10 @@
         "action_sync_desc": "複数のデバイス間でセーブを同期",
         "action_settings": "設定",
         "action_settings_desc": "外観・バックアップ・同期の設定",
-        "sync_off": "未設定"
+        "sync_off": "未設定",
+        "recent_backups": "最近のバックアップ",
+        "no_recent": "バックアップがありません",
+        "version_short": "v{n}"
     },
     "empty": {
         "scan_title": "まだセーブをスキャンしていません",

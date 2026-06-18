@@ -27,7 +27,10 @@
         "action_sync_desc": "Sync saves across your devices",
         "action_settings": "Settings",
         "action_settings_desc": "Appearance, backup and sync options",
-        "sync_off": "Not configured"
+        "sync_off": "Not configured",
+        "recent_backups": "Recent backups",
+        "no_recent": "No backups yet",
+        "version_short": "v{n}"
     },
     "empty": {
         "scan_title": "No saves scanned yet",

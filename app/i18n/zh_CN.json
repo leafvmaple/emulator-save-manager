@@ -27,7 +27,10 @@
         "action_sync_desc": "在多台设备间同步存档",
         "action_settings": "设置",
         "action_settings_desc": "外观、备份与同步选项",
-        "sync_off": "未配置"
+        "sync_off": "未配置",
+        "recent_backups": "最近备份",
+        "no_recent": "还没有备份记录",
+        "version_short": "v{n}"
     },
     "empty": {
         "scan_title": "还没有扫描存档",

@@ -19,7 +19,10 @@ from qfluentwidgets import (
 from app.i18n import t
 from app.version import get_app_version
 from app.assets import app_icon_path
+from app.core.game_icon import get_plugin_icon
 from app.ui import theme
+
+RECENT_LIMIT = 6
 
 
 class _StatCard(SimpleCardWidget):
@@ -83,6 +86,53 @@ class _ActionCard(CardWidget):
         chevron = IconWidget(FIF.CHEVRON_RIGHT, self)
         chevron.setFixedSize(14, 14)
         lay.addWidget(chevron, 0, Qt.AlignmentFlag.AlignVCenter)
+
+
+class _RecentRow(CardWidget):
+    """A compact, clickable row for one recent backup."""
+
+    def __init__(self, record, parent: QWidget | None = None) -> None:  # noqa: ANN001
+        super().__init__(parent)
+        self.setFixedHeight(56)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(theme.GAP_LG, theme.GAP_SM, theme.GAP_LG, theme.GAP_SM)
+        lay.setSpacing(theme.GAP_MD)
+
+        gs = record.game_save
+        pm = get_plugin_icon(gs.emulator, 24)
+        icon = QLabel(self)
+        icon.setFixedSize(24, 24)
+        icon.setScaledContents(True)
+        if pm and not pm.isNull():
+            icon.setPixmap(pm)
+        else:
+            icon = IconWidget(FIF.GAME, self)
+            icon.setFixedSize(24, 24)
+        lay.addWidget(icon, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        col = QVBoxLayout()
+        col.setSpacing(0)
+        col.setContentsMargins(0, 0, 0, 0)
+        name = StrongBodyLabel(gs.game_name or gs.game_id, self)
+        col.addWidget(name)
+        sub = CaptionLabel(gs.emulator, self)
+        sub.setStyleSheet(f"color:{theme.text_muted()};")
+        col.addWidget(sub)
+        lay.addLayout(col, 1)
+
+        meta = QVBoxLayout()
+        meta.setSpacing(0)
+        meta.setContentsMargins(0, 0, 0, 0)
+        ver = CaptionLabel(t("home.version_short", n=str(record.version)), self)
+        ver.setStyleSheet(f"color:{theme.accent()};")
+        ver.setAlignment(Qt.AlignmentFlag.AlignRight)
+        meta.addWidget(ver)
+        when = CaptionLabel(record.display_time, self)
+        when.setStyleSheet(f"color:{theme.text_muted()};")
+        when.setAlignment(Qt.AlignmentFlag.AlignRight)
+        meta.addWidget(when)
+        lay.addLayout(meta, 0)
 
 
 class HomePage(QWidget):
@@ -173,6 +223,18 @@ class HomePage(QWidget):
             card.clicked.connect(cb)
             grid.addWidget(card, i // 2, i % 2)
         page.addLayout(grid)
+
+        # --- Recent backups ---
+        page.addWidget(self._section_title(t("home.recent_backups"), container))
+        self._recent_box = QVBoxLayout()
+        self._recent_box.setSpacing(theme.GAP_SM)
+        self._recent_box.setContentsMargins(0, 0, 0, 0)
+        page.addLayout(self._recent_box)
+        self._recent_empty = CaptionLabel(t("home.no_recent"), container)
+        self._recent_empty.setStyleSheet(f"color:{theme.text_muted()};")
+        page.addWidget(self._recent_empty)
+        self._recent_rows: list[_RecentRow] = []
+
         page.addStretch()
 
         scroll.setWidget(container)
@@ -205,6 +267,7 @@ class HomePage(QWidget):
             except Exception:  # pragma: no cover - defensive
                 count = 0
         self._stat_backups.set_value(count)
+        self._refresh_recent()
 
         # Sync status
         if self._config.sync_backend == "webdav":
@@ -215,6 +278,29 @@ class HomePage(QWidget):
             label = (t("settings.sync_method_folder")
                      if folder not in ("", ".") else t("home.sync_off"))
         self._stat_sync.set_value(label)
+
+    def _refresh_recent(self) -> None:
+        for row in self._recent_rows:
+            self._recent_box.removeWidget(row)
+            row.deleteLater()
+        self._recent_rows.clear()
+
+        records = []
+        if self._backup_manager is not None:
+            try:
+                for recs in self._backup_manager.list_all_backups().values():
+                    records.extend(recs)
+            except Exception:  # pragma: no cover - defensive
+                records = []
+        records.sort(key=lambda r: r.backup_time, reverse=True)
+        recent = records[:RECENT_LIMIT]
+
+        for rec in recent:
+            row = _RecentRow(rec, self)
+            row.clicked.connect(lambda: self.navigate_requested.emit("restore"))
+            self._recent_box.addWidget(row)
+            self._recent_rows.append(row)
+        self._recent_empty.setVisible(not recent)
 
     def refresh(self) -> None:
         self._update_dynamic()
