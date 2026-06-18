@@ -1,3 +1,13 @@
+# v1.0.1
+
+Released on 2026-06-18
+
+## 📦 Other Changes
+
+- Polish first-run flow and PCSX2 grouping (`0be4d27`)
+
+---
+
 # v1.0.0
 
 Released on 2026-06-18
