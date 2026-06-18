@@ -6,21 +6,28 @@ scan / backup / restore list reads as intentional rather than broken.
 
 from __future__ import annotations
 
+from typing import Callable
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget, QVBoxLayout
-from qfluentwidgets import IconWidget, StrongBodyLabel, CaptionLabel, FluentIconBase
+from qfluentwidgets import (
+    IconWidget, StrongBodyLabel, CaptionLabel, PrimaryPushButton, FluentIconBase,
+)
 
 from app.ui import theme
 
 
 class EmptyState(QWidget):
-    """A vertically-centered icon + title + description block."""
+    """A vertically-centered icon + title + description (+ optional action)."""
 
     def __init__(
         self,
         icon: FluentIconBase,
         title: str,
         description: str = "",
+        button_text: str = "",
+        on_click: Callable[[], None] | None = None,
+        button_icon: FluentIconBase | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -45,6 +52,14 @@ class EmptyState(QWidget):
         self._desc.setStyleSheet(f"color:{theme.text_muted()};")
         self._desc.setVisible(bool(description))
         box.addWidget(self._desc)
+
+        if button_text:
+            box.addSpacing(theme.GAP_XS)
+            btn = (PrimaryPushButton(button_icon, button_text, self)
+                   if button_icon else PrimaryPushButton(button_text, self))
+            if on_click is not None:
+                btn.clicked.connect(lambda: on_click())
+            box.addWidget(btn, 0, Qt.AlignmentFlag.AlignHCenter)
 
     def set_text(self, title: str, description: str = "") -> None:
         self._title.setText(title)

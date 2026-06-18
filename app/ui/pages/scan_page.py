@@ -608,7 +608,9 @@ class ScanPage(QWidget):
 
         # Empty state — shown until the first scan produces cards
         self._empty = EmptyState(
-            FIF.SEARCH, t("empty.scan_title"), t("empty.scan_desc"), self
+            FIF.SEARCH, t("empty.scan_title"), t("empty.scan_desc"),
+            button_text=t("scan.start_scan"), on_click=self._on_scan,
+            button_icon=FIF.SEARCH, parent=self,
         )
         page.addWidget(self._empty, stretch=1)
         self._scroll.setVisible(False)

@@ -643,7 +643,9 @@ class RestorePage(QWidget):
 
         # Empty state — shown until backups exist
         self._empty = EmptyState(
-            FIF.HISTORY, t("empty.restore_title"), t("empty.restore_desc"), self
+            FIF.HISTORY, t("empty.restore_title"), t("empty.restore_desc"),
+            button_text=t("common.refresh"), on_click=self._refresh_backups,
+            button_icon=FIF.SYNC, parent=self,
         )
         page_layout.addWidget(self._empty, stretch=1)
         self._scroll.hide()

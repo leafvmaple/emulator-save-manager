@@ -38,7 +38,8 @@
         "backup_title": "Nothing to back up",
         "backup_desc": "Scan for saves first, then come back to back them up",
         "restore_title": "No backups yet",
-        "restore_desc": "Once you back up saves, restorable versions show up here"
+        "restore_desc": "Once you back up saves, restorable versions show up here",
+        "go_scan": "Go to Scan"
     },
     "scan": {
         "title": "Save Scanner",

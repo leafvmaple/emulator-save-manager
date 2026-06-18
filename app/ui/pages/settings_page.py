@@ -19,18 +19,18 @@ from qfluentwidgets import (
     RangeSettingCard, SwitchSettingCard, FluentIcon as FIF,
     InfoBar, InfoBarPosition, setTheme, Theme,
     CardWidget, SmoothScrollArea, IconWidget, setFont,
-    TransparentToolButton, LineEdit, PasswordLineEdit, PushButton,
+    TransparentToolButton, LineEdit, PasswordLineEdit, PushButton, HyperlinkButton,
 )
 from qfluentwidgets import (
     ConfigItem, OptionsConfigItem, RangeConfigItem,
     BoolValidator, OptionsValidator, RangeValidator, QConfig,
 )
-from PySide6.QtGui import QFont
-from loguru import logger
+from PySide6.QtGui import QFont, QPixmap
 
 from app.i18n import t, set_language
 from app.config import Config
 from app.core.game_icon import get_plugin_icon
+from app.assets import app_icon_path
 from app.ui import theme
 from app.ui.components.page_header import PageHeader
 
@@ -78,26 +78,29 @@ _app_qconfig = _AppQConfig()
 # -----------------------------------------------------------------------
 
 class _AboutCard(CardWidget):
-    """Simple card showing app name, version and description."""
+    """Card showing the app logo, name, version, description and a repo link."""
+
+    REPO_URL = "https://github.com/leafvmaple/emulator-save-manager"
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(100)
 
         root = QHBoxLayout(self)
         root.setContentsMargins(20, 16, 20, 16)
         root.setSpacing(16)
 
-        icon = IconWidget(FIF.INFO, self)
-        icon.setFixedSize(36, 36)
-        root.addWidget(icon, 0, Qt.AlignmentFlag.AlignVCenter)
+        logo = QLabel(self)
+        logo.setFixedSize(48, 48)
+        logo.setScaledContents(True)
+        logo.setPixmap(QPixmap(str(app_icon_path())))
+        root.addWidget(logo, 0, Qt.AlignmentFlag.AlignVCenter)
 
         col = QVBoxLayout()
         col.setSpacing(4)
         col.setContentsMargins(0, 0, 0, 0)
 
         name = StrongBodyLabel(t("app.name"), self)
-        setFont(name, 15, QFont.Weight.DemiBold)
+        setFont(name, 16, QFont.Weight.DemiBold)
         col.addWidget(name)
 
         from app.version import get_app_version
@@ -107,9 +110,13 @@ class _AboutCard(CardWidget):
 
         desc = CaptionLabel(t("settings.about_desc"), self)
         desc.setStyleSheet(f"color:{theme.text_secondary()};")
+        desc.setWordWrap(True)
         col.addWidget(desc)
 
         root.addLayout(col, 1)
+
+        gh = HyperlinkButton(self.REPO_URL, "GitHub", self, FIF.LINK)
+        root.addWidget(gh, 0, Qt.AlignmentFlag.AlignVCenter)
 
 
 class _WebDavTestWorker(QThread):

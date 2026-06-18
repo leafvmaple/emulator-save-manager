@@ -88,9 +88,10 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM,
         )
 
-        # Quick-action wiring from the Home dashboard.
+        # Quick-action wiring from the Home dashboard + empty-state buttons.
         self.home_page.scan_requested.connect(self._on_home_scan)
         self.home_page.navigate_requested.connect(self._navigate_to)
+        self.backup_page.scan_requested.connect(self._on_home_scan)
         self.switchTo(self.home_page)
 
     # ------------------------------------------------------------------

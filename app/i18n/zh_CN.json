@@ -38,7 +38,8 @@
         "backup_title": "没有可备份的存档",
         "backup_desc": "先到扫描页扫描出存档，再回来备份",
         "restore_title": "还没有备份",
-        "restore_desc": "备份存档后，这里会显示可还原的版本"
+        "restore_desc": "备份存档后，这里会显示可还原的版本",
+        "go_scan": "去扫描"
     },
     "scan": {
         "title": "存档扫描",

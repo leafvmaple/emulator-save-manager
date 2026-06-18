@@ -260,6 +260,8 @@ class _GameCard(CardWidget):
 class BackupPage(QWidget):
     """Page for backing up scanned game saves with card-based UI."""
 
+    scan_requested = Signal()  # emitted by the empty-state "go scan" button
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("backup_page")
@@ -368,7 +370,9 @@ class BackupPage(QWidget):
 
         # Empty state
         self._empty = EmptyState(
-            FIF.SAVE, t("empty.backup_title"), t("empty.backup_desc"), self
+            FIF.SAVE, t("empty.backup_title"), t("empty.backup_desc"),
+            button_text=t("empty.go_scan"), on_click=self.scan_requested.emit,
+            button_icon=FIF.SEARCH, parent=self,
         )
         page_layout.addWidget(self._empty, stretch=1)
         self._scroll.hide()  # empty state shows until saves arrive
