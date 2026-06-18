@@ -3,11 +3,39 @@
         "name": "Emulator Save Manager"
     },
     "nav": {
+        "home": "Home",
         "scan": "Scan",
         "backup": "Backup",
         "restore": "Restore",
         "sync": "Sync",
         "settings": "Settings"
+    },
+    "home": {
+        "subtitle": "Cross-platform emulator save management and multi-device sync",
+        "overview": "Overview",
+        "stat_emulators": "Emulators",
+        "stat_saves": "Game saves",
+        "stat_backups": "Backed-up games",
+        "stat_sync": "Sync method",
+        "not_scanned": "Not scanned",
+        "quick_actions": "Quick actions",
+        "action_scan": "Scan saves",
+        "action_scan_desc": "Detect emulators and scan game saves",
+        "action_backup": "Back up saves",
+        "action_backup_desc": "Back up game saves locally",
+        "action_sync": "Multi-device sync",
+        "action_sync_desc": "Sync saves across your devices",
+        "action_settings": "Settings",
+        "action_settings_desc": "Appearance, backup and sync options",
+        "sync_off": "Not configured"
+    },
+    "empty": {
+        "scan_title": "No saves scanned yet",
+        "scan_desc": "Click “Start scan” to detect emulators and list game saves",
+        "backup_title": "Nothing to back up",
+        "backup_desc": "Scan for saves first, then come back to back them up",
+        "restore_title": "No backups yet",
+        "restore_desc": "Once you back up saves, restorable versions show up here"
     },
     "scan": {
         "title": "Save Scanner",

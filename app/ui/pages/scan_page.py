@@ -35,6 +35,7 @@ from app.core.game_icon import GameIconProvider, IconDownloadWorker, get_plugin_
 from app.ui import theme
 from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
+from app.ui.components.empty_state import EmptyState
 
 
 # -----------------------------------------------------------------------
@@ -255,11 +256,13 @@ class _GameSaveCard(CardWidget):
 
         root.addLayout(info, 1)
 
-        # Expand / collapse chevron
+        # Expand / collapse chevron — clicking anywhere on the card row also
+        # toggles it (the action buttons consume their own clicks first).
         self._expand_btn = TransparentToolButton(FIF.CHEVRON_RIGHT, self)
         self._expand_btn.setFixedSize(28, 28)
         self._expand_btn.setToolTip(t("scan.show_files"))
         self._expand_btn.clicked.connect(self._toggle_expand)
+        self.clicked.connect(self._toggle_expand)
         root.addWidget(self._expand_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
         # Open folder button
@@ -312,14 +315,22 @@ class _GameSaveCard(CardWidget):
         hdr.addStretch()
         detail_layout.addLayout(hdr)
 
-        # File rows
+        # File rows — each is a hoverable widget for scanability
+        muted = f"color:{theme.text_muted()};"
         for sf in all_files:
-            frow = QHBoxLayout()
+            row_widget = QWidget(self)
+            row_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            row_widget.setStyleSheet(
+                f"QWidget:hover {{ background:{theme.subtle_fill()}; "
+                f"border-radius:{theme.RADIUS_SM}px; }}"
+            )
+            frow = QHBoxLayout(row_widget)
+            frow.setContentsMargins(4, 2, 4, 2)
             frow.setSpacing(0)
 
             # File / folder name (with path tooltip)
             file_label = CaptionLabel(sf.path.name, self)
-            file_label.setFixedWidth(260)
+            file_label.setFixedWidth(256)
             file_label.setToolTip(str(sf.path))
             file_label.setStyleSheet(f"color:{theme.text_primary()}; font-weight:600;")
             frow.addWidget(file_label)
@@ -333,6 +344,7 @@ class _GameSaveCard(CardWidget):
             # Size
             size_label = CaptionLabel(_format_size(sf.size), self)
             size_label.setFixedWidth(80)
+            size_label.setStyleSheet(muted)
             frow.addWidget(size_label)
 
             # Modified time
@@ -340,6 +352,7 @@ class _GameSaveCard(CardWidget):
                 sf.modified.strftime("%Y/%m/%d %H:%M") if sf.modified else "-",
                 self,
             )
+            mod_label.setStyleSheet(muted)
             frow.addWidget(mod_label)
             frow.addStretch()
 
@@ -351,7 +364,7 @@ class _GameSaveCard(CardWidget):
             file_folder_btn.clicked.connect(lambda checked=False, p=_path: self._open_file_folder(p))
             frow.addWidget(file_folder_btn)
 
-            detail_layout.addLayout(frow)
+            detail_layout.addWidget(row_widget)
 
         outer.addWidget(self._detail_widget)
 
@@ -555,11 +568,12 @@ class ScanPage(QWidget):
         self._scroll.setWidget(self._scroll_inner)
         page.addWidget(self._scroll, stretch=1)
 
-        # Empty state
-        self._empty_label = BodyLabel(t("common.no_data"), self)
-        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_label.setStyleSheet(f"color:{theme.text_muted()};")
-        page.addWidget(self._empty_label)
+        # Empty state — shown until the first scan produces cards
+        self._empty = EmptyState(
+            FIF.SEARCH, t("empty.scan_title"), t("empty.scan_desc"), self
+        )
+        page.addWidget(self._empty, stretch=1)
+        self._scroll.setVisible(False)
 
     # ------------------------------------------------------------------
     # Scan logic
@@ -723,7 +737,7 @@ class ScanPage(QWidget):
         self._save_count_badge.setText(str(shown))
         has_cards = shown > 0
         self._scroll.setVisible(has_cards)
-        self._empty_label.setVisible(not has_cards)
+        self._empty.setVisible(not has_cards)
 
     def _on_search(self, text: str) -> None:
         self._refresh_game_cards(text)
@@ -787,3 +801,6 @@ class ScanPage(QWidget):
 
     def get_saves(self) -> list[GameSave]:
         return list(self._saves)
+
+    def get_emulators(self) -> list[EmulatorInfo]:
+        return list(self._emulators)

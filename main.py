@@ -62,6 +62,7 @@ def main() -> None:
     window = MainWindow(config)
 
     # Wire services into UI pages
+    window.home_page.set_backup_manager(backup_mgr)
     window.scan_page.set_scanner(scanner)
     window.scan_page.set_icon_provider(icon_provider)
     window.backup_page.set_backup_manager(backup_mgr)

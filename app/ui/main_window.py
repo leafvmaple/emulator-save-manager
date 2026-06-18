@@ -17,6 +17,7 @@ from qfluentwidgets import (
 
 from app.config import Config
 from app.i18n import t
+from app.ui.pages.home_page import HomePage
 from app.ui.pages.scan_page import ScanPage
 from app.ui.pages.backup_page import BackupPage
 from app.ui.pages.restore_page import RestorePage
@@ -65,13 +66,15 @@ class MainWindow(FluentWindow):
 
     def _init_pages(self) -> None:
         # Create pages
+        self.home_page = HomePage(self._cfg, self)
         self.scan_page = ScanPage(self)
         self.backup_page = BackupPage(self)
         self.restore_page = RestorePage(self)
         self.sync_page = SyncPage(self)
         self.settings_page = SettingsPage(self)
 
-        # Add to navigation
+        # Add to navigation — Home first, and the default landing page.
+        self.addSubInterface(self.home_page, FIF.HOME, t("nav.home"))
         self.addSubInterface(self.scan_page, FIF.SEARCH, t("nav.scan"))
         self.addSubInterface(self.backup_page, FIF.SAVE, t("nav.backup"))
         self.addSubInterface(self.restore_page, FIF.HISTORY, t("nav.restore"))
@@ -82,6 +85,31 @@ class MainWindow(FluentWindow):
             t("nav.settings"),
             position=NavigationItemPosition.BOTTOM,
         )
+
+        # Quick-action wiring from the Home dashboard.
+        self.home_page.scan_requested.connect(self._on_home_scan)
+        self.home_page.navigate_requested.connect(self._navigate_to)
+        self.switchTo(self.home_page)
+
+    # ------------------------------------------------------------------
+    # Navigation helpers
+    # ------------------------------------------------------------------
+
+    def _navigate_to(self, key: str) -> None:
+        page = {
+            "scan": self.scan_page,
+            "backup": self.backup_page,
+            "restore": self.restore_page,
+            "sync": self.sync_page,
+            "settings": self.settings_page,
+        }.get(key)
+        if page is not None:
+            self.switchTo(page)
+
+    def _on_home_scan(self) -> None:
+        self.switchTo(self.scan_page)
+        if not self.scan_page.is_scanning:
+            self.scan_page.start_scan()
 
     def _apply_theme(self) -> None:
         theme_str = self._cfg.theme
@@ -138,6 +166,7 @@ class MainWindow(FluentWindow):
         self.start_auto_backup_cycle()
 
     def _on_saves_updated(self, saves: list) -> None:
+        self.home_page.update_stats(self.scan_page.get_emulators(), saves)
         if self._auto_backup_pending:
             self._auto_backup_pending = False
             self.backup_page.auto_backup(saves)

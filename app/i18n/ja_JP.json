@@ -3,11 +3,39 @@
         "name": "エミュレータセーブマネージャ"
     },
     "nav": {
+        "home": "ホーム",
         "scan": "スキャン",
         "backup": "バックアップ",
         "restore": "復元",
         "sync": "同期",
         "settings": "設定"
+    },
+    "home": {
+        "subtitle": "クロスプラットフォームのセーブ管理とマルチデバイス同期",
+        "overview": "概要",
+        "stat_emulators": "エミュレータ",
+        "stat_saves": "ゲームセーブ",
+        "stat_backups": "バックアップ済み",
+        "stat_sync": "同期方法",
+        "not_scanned": "未スキャン",
+        "quick_actions": "クイック操作",
+        "action_scan": "セーブをスキャン",
+        "action_scan_desc": "エミュレータを検出してセーブをスキャン",
+        "action_backup": "セーブをバックアップ",
+        "action_backup_desc": "ゲームセーブをローカルに保存",
+        "action_sync": "マルチデバイス同期",
+        "action_sync_desc": "複数のデバイス間でセーブを同期",
+        "action_settings": "設定",
+        "action_settings_desc": "外観・バックアップ・同期の設定",
+        "sync_off": "未設定"
+    },
+    "empty": {
+        "scan_title": "まだセーブをスキャンしていません",
+        "scan_desc": "「スキャン開始」でエミュレータを検出しセーブを一覧表示",
+        "backup_title": "バックアップ対象がありません",
+        "backup_desc": "先にセーブをスキャンしてから戻ってバックアップ",
+        "restore_title": "バックアップがありません",
+        "restore_desc": "セーブをバックアップすると復元可能な版がここに表示されます"
     },
     "scan": {
         "title": "セーブスキャン",

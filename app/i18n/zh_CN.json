@@ -3,11 +3,39 @@
         "name": "模拟器存档管理器"
     },
     "nav": {
+        "home": "主页",
         "scan": "扫描",
         "backup": "备份",
         "restore": "还原",
         "sync": "同步",
         "settings": "设置"
+    },
+    "home": {
+        "subtitle": "跨平台模拟器存档管理与多端同步",
+        "overview": "概览",
+        "stat_emulators": "模拟器",
+        "stat_saves": "游戏存档",
+        "stat_backups": "已备份游戏",
+        "stat_sync": "同步方式",
+        "not_scanned": "未扫描",
+        "quick_actions": "快捷操作",
+        "action_scan": "扫描存档",
+        "action_scan_desc": "检测模拟器并扫描游戏存档",
+        "action_backup": "备份存档",
+        "action_backup_desc": "将游戏存档备份到本地",
+        "action_sync": "多端同步",
+        "action_sync_desc": "在多台设备间同步存档",
+        "action_settings": "设置",
+        "action_settings_desc": "外观、备份与同步选项",
+        "sync_off": "未配置"
+    },
+    "empty": {
+        "scan_title": "还没有扫描存档",
+        "scan_desc": "点击「开始扫描」检测模拟器并列出游戏存档",
+        "backup_title": "没有可备份的存档",
+        "backup_desc": "先到扫描页扫描出存档，再回来备份",
+        "restore_title": "还没有备份",
+        "restore_desc": "备份存档后，这里会显示可还原的版本"
     },
     "scan": {
         "title": "存档扫描",

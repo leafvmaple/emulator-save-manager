@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect,
 )
 from qfluentwidgets import (
-    BodyLabel, CaptionLabel, StrongBodyLabel,
+    CaptionLabel, StrongBodyLabel,
     PrimaryPushButton, PushButton, TransparentToolButton,
     CardWidget, SmoothScrollArea, FluentIcon as FIF,
     InfoBar, InfoBarPosition, InfoBadge,
@@ -31,6 +31,7 @@ from app.core.game_icon import GameIconProvider, get_plugin_icon
 from app.ui import theme
 from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
+from app.ui.components.empty_state import EmptyState
 
 
 # -----------------------------------------------------------------------
@@ -375,11 +376,11 @@ class BackupPage(QWidget):
         page_layout.addWidget(self._scroll, stretch=1)
 
         # Empty state
-        self._empty_label = BodyLabel(t("common.no_data"), self)
-        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_label.setStyleSheet(f"color:{theme.text_muted()};")
-        page_layout.addWidget(self._empty_label)
-        self._empty_label.hide()
+        self._empty = EmptyState(
+            FIF.SAVE, t("empty.backup_title"), t("empty.backup_desc"), self
+        )
+        page_layout.addWidget(self._empty, stretch=1)
+        self._scroll.hide()  # empty state shows until saves arrive
 
     # ------------------------------------------------------------------
     # Card population
@@ -399,11 +400,11 @@ class BackupPage(QWidget):
 
         if not groups:
             self._scroll.hide()
-            self._empty_label.show()
+            self._empty.show()
             self._update_count()
             return
 
-        self._empty_label.hide()
+        self._empty.hide()
         self._scroll.show()
 
         for key in sorted(groups):
