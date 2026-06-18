@@ -323,6 +323,7 @@ class BackupManager:
                     backup_path=zp,
                     is_pinned=info.is_pinned,
                     label=info.label,
+                    note=info.note,
                 ))
             except Exception as e:
                 logger.warning("Failed to read backup meta {}: {}", meta_path, e)
@@ -382,6 +383,24 @@ class BackupManager:
         """Set/replace a backup's user label (pin state untouched)."""
         self._update_meta(record.backup_path, label=label)
         record.label = label
+
+    def set_checkpoint(
+        self,
+        record: BackupRecord,
+        label: str,
+        note: str,
+        is_pinned: bool,
+    ) -> None:
+        """Update a backup's user-facing checkpoint metadata."""
+        self._update_meta(
+            record.backup_path,
+            label=label,
+            note=note,
+            is_pinned=is_pinned,
+        )
+        record.label = label
+        record.note = note
+        record.is_pinned = is_pinned
 
     def delete_backup(self, record: BackupRecord) -> None:
         """Delete a specific backup (zip + sidecar json)."""

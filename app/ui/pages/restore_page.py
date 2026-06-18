@@ -22,7 +22,7 @@ from qfluentwidgets import (
     PushButton, TransparentToolButton,
     CardWidget, SmoothScrollArea, CheckBox,
     FluentIcon as FIF, InfoBar, InfoBarPosition, InfoBadge,
-    MessageBox, MessageBoxBase, LineEdit, ProgressRing, isDarkTheme, setFont,
+    MessageBox, MessageBoxBase, LineEdit, TextEdit, ProgressRing, isDarkTheme, setFont,
 )
 
 from app.i18n import t
@@ -98,24 +98,51 @@ def _backup_types(record: BackupRecord) -> list[str]:
 # -----------------------------------------------------------------------
 
 class _LabelDialog(MessageBoxBase):
-    """Small dialog to set/edit a backup's label."""
+    """Small dialog to set/edit a backup checkpoint."""
 
-    def __init__(self, current: str = "", parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        current: str = "",
+        note: str | QWidget = "",
+        is_pinned: bool = False,
+        parent: QWidget | None = None,
+    ) -> None:
+        if isinstance(note, QWidget) and parent is None:
+            parent = note
+            note = ""
         super().__init__(parent)
-        self.titleLabel = SubtitleLabel(t("restore.label_title"), self)
+        self.titleLabel = SubtitleLabel(t("restore.checkpoint_title"), self)
         self.edit = LineEdit(self)
         self.edit.setText(current)
         self.edit.setPlaceholderText(t("restore.label_placeholder"))
         self.edit.setClearButtonEnabled(True)
+        self.note_edit = TextEdit(self)
+        self.note_edit.setPlainText(str(note))
+        self.note_edit.setPlaceholderText(t("restore.note_placeholder"))
+        self.note_edit.setFixedHeight(96)
+        self.pin_check = CheckBox(t("restore.important_checkpoint"), self)
+        self.pin_check.setChecked(is_pinned)
         self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(CaptionLabel(t("restore.label_field"), self))
         self.viewLayout.addWidget(self.edit)
+        self.viewLayout.addWidget(CaptionLabel(t("restore.note_field"), self))
+        self.viewLayout.addWidget(self.note_edit)
+        self.viewLayout.addWidget(self.pin_check)
         self.yesButton.setText(t("common.confirm"))
         self.cancelButton.setText(t("common.cancel"))
-        self.widget.setMinimumWidth(360)
+        self.widget.setMinimumWidth(420)
 
     @property
     def label_text(self) -> str:
         return self.edit.text().strip()
+
+    @property
+    def note_text(self) -> str:
+        return self.note_edit.toPlainText().strip()
+
+    @property
+    def is_pinned(self) -> bool:
+        return self.pin_check.isChecked()
 
 
 class _RestoreSelectDialog(MessageBoxBase):
@@ -278,7 +305,7 @@ class _VersionCard(QWidget):
         self._prev_record = prev_record
         self._is_first = is_first
         self._is_last = is_last
-        self.setFixedHeight(56)
+        self.setFixedHeight(76 if record.note else 56)
         self.setObjectName("versionRow")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
@@ -324,11 +351,21 @@ class _VersionCard(QWidget):
         top_row.addStretch()
         info.addLayout(top_row)
 
-        # Size
+        # Note + size
         size = _zip_size(record)
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(theme.GAP_MD)
+        if record.note:
+            note_label = CaptionLabel(record.note.replace("\n", "  "), self)
+            note_label.setToolTip(record.note)
+            note_label.setStyleSheet(f"color:{theme.text_muted()};")
+            bottom_row.addWidget(note_label, 1)
         if size:
             size_label = CaptionLabel(_format_size(size), self)
-            info.addWidget(size_label)
+            size_label.setStyleSheet(f"color:{theme.text_muted()};")
+            bottom_row.addWidget(size_label, 0, Qt.AlignmentFlag.AlignRight)
+        if record.note or size:
+            info.addLayout(bottom_row)
 
         root.addLayout(info, 1)
 
@@ -360,7 +397,7 @@ class _VersionCard(QWidget):
 
         label_btn = TransparentToolButton(FIF.LABEL, self)
         label_btn.setFixedSize(28, 28)
-        label_btn.setToolTip(t("backup.label"))
+        label_btn.setToolTip(t("restore.edit_checkpoint"))
         label_btn.clicked.connect(lambda: self.label_clicked.emit(self.record))
         root.addWidget(label_btn)
 
@@ -794,10 +831,15 @@ class RestorePage(QWidget):
     def _on_label(self, record: BackupRecord) -> None:
         if self._backup_manager is None:
             return
-        dlg = _LabelDialog(record.label, self)
+        dlg = _LabelDialog(record.label, record.note, record.is_pinned, self)
         if not dlg.exec():
             return
-        self._backup_manager.set_label(record, dlg.label_text)
+        self._backup_manager.set_checkpoint(
+            record,
+            dlg.label_text,
+            dlg.note_text,
+            dlg.is_pinned,
+        )
         self._refresh_backups()
 
     def _on_delete(self, record: BackupRecord) -> None:

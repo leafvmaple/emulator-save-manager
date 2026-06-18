@@ -8,7 +8,7 @@ An *About* section is added at the bottom.
 from __future__ import annotations
 
 
-from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtCore import Qt, Signal, QThread, QUrl
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QLabel,
 )
@@ -24,11 +24,12 @@ from qfluentwidgets import (
     ConfigItem, OptionsConfigItem, RangeConfigItem,
     BoolValidator, OptionsValidator, RangeValidator, QConfig,
 )
-from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtGui import QDesktopServices, QFont, QPixmap
 
 from app.i18n import t, set_language
 from app.config import Config
 from app.core.game_icon import get_plugin_icon
+from app.core.update_check import check_latest_release
 from app.assets import app_icon_path
 from app.ui import theme
 from app.ui.components.page_header import PageHeader
@@ -85,7 +86,9 @@ class _AboutCard(CardWidget):
         super().__init__(parent)
         # A custom CardWidget inside a SettingCardGroup won't auto-size — it
         # collapses to a strip unless given an explicit height.
-        self.setFixedHeight(96)
+        self.setFixedHeight(132)
+        self._update_worker: _UpdateCheckWorker | None = None
+        self._release_url = ""
 
         root = QHBoxLayout(self)
         root.setContentsMargins(20, 16, 20, 16)
@@ -117,8 +120,70 @@ class _AboutCard(CardWidget):
 
         root.addLayout(col, 1)
 
+        actions = QVBoxLayout()
+        actions.setSpacing(6)
+        actions.setContentsMargins(0, 0, 0, 0)
         gh = HyperlinkButton(self.REPO_URL, "GitHub", self, FIF.LINK)
-        root.addWidget(gh, 0, Qt.AlignmentFlag.AlignVCenter)
+        actions.addWidget(gh)
+        self._check_btn = PushButton(FIF.UPDATE, t("settings.check_updates"), self)
+        self._check_btn.clicked.connect(self._on_check_updates)
+        actions.addWidget(self._check_btn)
+        self._download_btn = PushButton(FIF.DOWNLOAD, t("settings.download_update"), self)
+        self._download_btn.clicked.connect(self._open_release)
+        self._download_btn.hide()
+        actions.addWidget(self._download_btn)
+        root.addLayout(actions, 0)
+
+        self._update_status = CaptionLabel("", self)
+        self._update_status.setStyleSheet(f"color:{theme.text_muted()};")
+        col.addWidget(self._update_status)
+
+    def _on_check_updates(self) -> None:
+        if self._update_worker is not None and self._update_worker.isRunning():
+            return
+        self._download_btn.hide()
+        self._release_url = ""
+        self._check_btn.setEnabled(False)
+        self._update_status.setText(t("settings.update_checking"))
+        self._update_status.setStyleSheet(f"color:{theme.text_muted()};")
+        self._update_worker = _UpdateCheckWorker(self)
+        self._update_worker.done.connect(self._on_update_checked)
+        self._update_worker.start()
+
+    def _on_update_checked(self, info, error: str) -> None:  # noqa: ANN001
+        self._check_btn.setEnabled(True)
+        if error:
+            self._update_status.setText(t("settings.update_failed", error=error))
+            self._update_status.setStyleSheet(f"color:{theme.error()};")
+            return
+        if info.is_update_available:
+            self._release_url = info.release_url
+            self._update_status.setText(
+                t("settings.update_available", version=info.latest_version)
+            )
+            self._update_status.setStyleSheet(f"color:{theme.success()};")
+            self._download_btn.setVisible(bool(info.release_url))
+        else:
+            self._update_status.setText(t("settings.update_current"))
+            self._update_status.setStyleSheet(f"color:{theme.text_muted()};")
+
+    def _open_release(self) -> None:
+        if self._release_url:
+            QDesktopServices.openUrl(QUrl(self._release_url))
+
+
+class _UpdateCheckWorker(QThread):
+    """Checks GitHub Releases off the UI thread."""
+
+    done = Signal(object, str)  # (UpdateInfo | None, error)
+
+    def run(self) -> None:
+        try:
+            from app.version import get_app_version
+
+            self.done.emit(check_latest_release(get_app_version()), "")
+        except Exception as e:  # noqa: BLE001
+            self.done.emit(None, str(e))
 
 
 class _WebDavTestWorker(QThread):

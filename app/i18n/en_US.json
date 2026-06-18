@@ -105,6 +105,12 @@
         "deleted": "Backup deleted",
         "label_title": "Set Label",
         "label_placeholder": "e.g. Before final boss",
+        "checkpoint_title": "Edit Checkpoint",
+        "label_field": "Title",
+        "note_field": "Note",
+        "note_placeholder": "Record progress, context or warnings for this backup",
+        "important_checkpoint": "Mark as important checkpoint (exempt from auto-rotation)",
+        "edit_checkpoint": "Edit checkpoint",
         "select_title": "Select saves to restore",
         "select_desc": "Check the items to restore from this backup.",
         "newer_local": "newer locally"
@@ -211,7 +217,13 @@
         "path_removed": "Path removed",
         "save_success": "Settings saved",
         "about": "About",
-        "about_desc": "Cross-platform emulator save manager and multi-device sync tool"
+        "about_desc": "Cross-platform emulator save manager and multi-device sync tool",
+        "check_updates": "Check updates",
+        "update_checking": "Checking for updates…",
+        "update_available": "New version v{version} is available",
+        "update_current": "You are on the latest version",
+        "update_failed": "Update check failed: {error}",
+        "download_update": "Download update"
     },
     "common": {
         "confirm": "OK",

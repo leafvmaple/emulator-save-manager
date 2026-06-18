@@ -105,6 +105,12 @@
         "deleted": "备份已删除",
         "label_title": "设置标签",
         "label_placeholder": "例如：最终 Boss 前",
+        "checkpoint_title": "编辑检查点",
+        "label_field": "标题",
+        "note_field": "备注",
+        "note_placeholder": "记录这个备份节点的状态、进度或注意事项",
+        "important_checkpoint": "标记为重要节点（防止自动轮转删除）",
+        "edit_checkpoint": "编辑检查点",
         "select_title": "选择要还原的存档",
         "select_desc": "勾选要从该备份还原的存档项",
         "newer_local": "本地更新"
@@ -211,7 +217,13 @@
         "path_removed": "已移除路径",
         "save_success": "设置已保存",
         "about": "关于",
-        "about_desc": "跨平台模拟器存档管理与多端同步工具"
+        "about_desc": "跨平台模拟器存档管理与多端同步工具",
+        "check_updates": "检查更新",
+        "update_checking": "正在检查更新…",
+        "update_available": "发现新版本 v{version}",
+        "update_current": "已是最新版本",
+        "update_failed": "检查失败：{error}",
+        "download_update": "下载更新"
     },
     "common": {
         "confirm": "确定",

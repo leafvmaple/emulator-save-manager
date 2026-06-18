@@ -31,6 +31,9 @@ class BackupRecord:
     label: str = ""
     """Optional user-defined label (e.g. 'Before Final Boss')."""
 
+    note: str = ""
+    """Optional longer user note for this backup/checkpoint."""
+
     @property
     def display_time(self) -> str:
         """Formatted backup time for display."""
@@ -53,6 +56,7 @@ class BackupInfo:
     backup_paths: list[dict] = field(default_factory=list)
     is_pinned: bool = False
     label: str = ""
+    note: str = ""
     source_machine: str = ""
     crc32: str = ""
     emulator_data_path: str = ""
@@ -74,6 +78,7 @@ class BackupInfo:
             "backup_paths": self.backup_paths,
             "is_pinned": self.is_pinned,
             "label": self.label,
+            "note": self.note,
             "source_machine": self.source_machine,
             "crc32": self.crc32,
             "emulator_data_path": self.emulator_data_path,
@@ -92,6 +97,7 @@ class BackupInfo:
             is_pinned=data.get("is_pinned", False),
             emulator_data_path=data.get("emulator_data_path", ""),
             label=data.get("label", ""),
+            note=data.get("note", ""),
             source_machine=data.get("source_machine", ""),
             crc32=data.get("crc32", ""),
             content_hash=data.get("content_hash", ""),

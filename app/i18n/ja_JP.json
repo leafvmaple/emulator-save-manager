@@ -105,6 +105,12 @@
         "deleted": "バックアップを削除しました",
         "label_title": "ラベルを設定",
         "label_placeholder": "例：ラスボス前",
+        "checkpoint_title": "チェックポイントを編集",
+        "label_field": "タイトル",
+        "note_field": "メモ",
+        "note_placeholder": "このバックアップ時点の進行状況や注意点を記録",
+        "important_checkpoint": "重要なチェックポイントにする（自動削除の対象外）",
+        "edit_checkpoint": "チェックポイントを編集",
         "select_title": "復元するセーブを選択",
         "select_desc": "このバックアップから復元する項目を選択してください。",
         "newer_local": "ローカルが新しい"
@@ -211,7 +217,13 @@
         "path_removed": "パスを削除しました",
         "save_success": "設定を保存しました",
         "about": "について",
-        "about_desc": "クロスプラットフォームエミュレータセーブ管理・同期ツール"
+        "about_desc": "クロスプラットフォームエミュレータセーブ管理・同期ツール",
+        "check_updates": "更新を確認",
+        "update_checking": "更新を確認中…",
+        "update_available": "新しいバージョン v{version} があります",
+        "update_current": "最新バージョンです",
+        "update_failed": "更新確認に失敗しました: {error}",
+        "download_update": "更新をダウンロード"
     },
     "common": {
         "confirm": "OK",

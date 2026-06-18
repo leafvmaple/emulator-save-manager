@@ -133,6 +133,19 @@ def test_set_label_persists(cfg):
     assert bm.list_backups("PCSX2", "SLUS-MGMT")[0].label == "speedrun PB"
 
 
+def test_set_checkpoint_persists_note_and_pin(cfg):
+    bm = BackupManager(cfg)
+    _seed_backups(bm, ["2020-01-01_00-00"])
+    rec = bm.list_backups("PCSX2", "SLUS-MGMT")[0]
+
+    bm.set_checkpoint(rec, "chapter 4", "Before route split", True)
+
+    refreshed = bm.list_backups("PCSX2", "SLUS-MGMT")[0]
+    assert refreshed.label == "chapter 4"
+    assert refreshed.note == "Before route split"
+    assert refreshed.is_pinned is True
+
+
 def test_delete_backup_removes_pair(cfg):
     bm = BackupManager(cfg)
     _seed_backups(bm, ["2020-01-01_00-00"])
