@@ -588,6 +588,11 @@ class RestorePage(QWidget):
     def set_icon_provider(self, provider: GameIconProvider) -> None:
         self._icon_provider = provider
 
+    def restyle(self) -> None:
+        """Rebuild theme-dependent content after a live theme switch."""
+        if self._all_backups:
+            self._refresh_cards()
+
     # ------------------------------------------------------------------
     # UI Setup
     # ------------------------------------------------------------------

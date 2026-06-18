@@ -10,6 +10,7 @@ from qfluentwidgets import (
     FluentWindow,
     NavigationItemPosition,
     FluentIcon as FIF,
+    qconfig,
     setTheme,
     setThemeColor,
     Theme,
@@ -38,6 +39,9 @@ class MainWindow(FluentWindow):
         self._init_pages()
         self._apply_theme()
         self.scan_page.saves_updated.connect(self._on_saves_updated)
+        # Custom-painted colours are resolved at build time, so re-apply them
+        # (and the accent) whenever the theme changes at runtime.
+        qconfig.themeChanged.connect(self._on_theme_refresh)
         self._setup_auto_backup_timer()
 
     # ------------------------------------------------------------------
@@ -132,6 +136,13 @@ class MainWindow(FluentWindow):
                 setThemeColor(accent, save=False)
         except (AttributeError, Exception):  # pragma: no cover - Qt-version dependent
             pass
+
+    def _on_theme_refresh(self, *_args) -> None:
+        """Re-style custom-painted widgets after a runtime theme change."""
+        self._apply_system_accent()
+        for page in (self.home_page, self.scan_page, self.backup_page,
+                     self.restore_page, self.sync_page):
+            page.restyle()
 
     # ------------------------------------------------------------------
     # Public

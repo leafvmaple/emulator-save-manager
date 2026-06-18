@@ -874,3 +874,10 @@ class ScanPage(QWidget):
 
     def get_emulators(self) -> list[EmulatorInfo]:
         return list(self._emulators)
+
+    def restyle(self) -> None:
+        """Rebuild theme-dependent content after a live theme switch."""
+        self._status_label.setStyleSheet(f"color:{theme.text_muted()};")
+        if self._saves:
+            self._refresh_emulator_cards()
+            self._refresh_game_cards(self._search.text())

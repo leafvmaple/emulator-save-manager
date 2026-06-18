@@ -305,6 +305,10 @@ class HomePage(QWidget):
     def refresh(self) -> None:
         self._update_dynamic()
 
+    def restyle(self) -> None:
+        """Rebuild theme-dependent content (recent rows) after a theme switch."""
+        self._update_dynamic()
+
     def showEvent(self, e) -> None:  # noqa: ANN001
         super().showEvent(e)
         self._update_dynamic()

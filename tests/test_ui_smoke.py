@@ -220,6 +220,31 @@ def test_scan_page_no_cache_is_noop(qtbot, cfg, tmp_path):
     assert page.get_saves() == []
 
 
+def test_live_theme_switch_rebuilds_cards(qtbot, cfg):
+    """Switching theme at runtime re-styles custom-painted cards (not just
+    Fluent's own widgets) — they're rebuilt so their colours follow the theme."""
+    from qfluentwidgets import setTheme, Theme
+    from app.ui.main_window import MainWindow
+    from app.models.game_save import GameSave, SaveFile, SaveType
+
+    setTheme(Theme.LIGHT)
+    w = MainWindow(cfg)
+    qtbot.addWidget(w)
+    setTheme(Theme.LIGHT)  # known starting point
+    w.scan_page._saves = [GameSave(
+        "PCSX2", "Game", "G",
+        [SaveFile(Path("C:/x/a.ps2"), SaveType.MEMCARD, 1, datetime.now())],
+        platform="PS2")]
+    w.scan_page._refresh_game_cards()
+    before = w.scan_page._game_cards[0]
+
+    setTheme(Theme.DARK)  # -> qconfig.themeChanged -> _on_theme_refresh -> restyle
+    after = w.scan_page._game_cards[0]
+    assert after is not before  # the card was rebuilt by the theme switch
+
+    setTheme(Theme.LIGHT)  # restore global theme for other tests
+
+
 def test_diff_dialog_builds(qtbot, cfg, make_game_save, tmp_path):
     from PySide6.QtWidgets import QWidget
     from app.core.backup import BackupManager

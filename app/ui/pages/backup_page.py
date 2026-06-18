@@ -280,6 +280,11 @@ class BackupPage(QWidget):
         self._saves = saves
         self._refresh_cards()
 
+    def restyle(self) -> None:
+        """Rebuild theme-dependent content after a live theme switch."""
+        if self._saves:
+            self._refresh_cards()
+
     def auto_backup(self, saves: list[GameSave]) -> None:
         """Back up changed saves in the background (called by the auto cycle)."""
         if self._backup_manager is None or not saves:

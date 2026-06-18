@@ -97,6 +97,11 @@ class SyncPage(QWidget):
         self._config = config
         self._refresh_status()
 
+    def restyle(self) -> None:
+        """Re-apply theme-dependent styles after a live theme switch."""
+        self._status_msg.setStyleSheet(f"color:{theme.text_muted()};")
+        self._refresh_status()  # re-colours the status pill
+
     # ------------------------------------------------------------------
     # UI
     # ------------------------------------------------------------------
