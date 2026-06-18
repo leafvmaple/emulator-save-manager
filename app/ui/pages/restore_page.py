@@ -441,11 +441,16 @@ class _GameBackupCard(CardWidget):
         title_col.addLayout(title_row)
 
         meta_row = QHBoxLayout()
-        meta_row.setSpacing(12)
-        meta_row.addWidget(CaptionLabel(f"ID: {game_id}", header))
-        meta_row.addWidget(CaptionLabel(
-            f"{len(records)} {t('backup.backup_count').lower()}", header
-        ))
+        meta_row.setSpacing(theme.GAP_MD)
+        muted = f"color:{theme.text_muted()};"
+
+        def _meta(text: str) -> CaptionLabel:
+            lbl = CaptionLabel(text, header)
+            lbl.setStyleSheet(muted)
+            return lbl
+
+        meta_row.addWidget(_meta(f"ID: {game_id}"))
+        meta_row.addWidget(_meta(f"{len(records)} {t('backup.backup_count').lower()}"))
 
         # Type badges from latest backup
         types = _backup_types(records[0]) if records else []
@@ -453,8 +458,8 @@ class _GameBackupCard(CardWidget):
             meta_row.addWidget(TypeBadge.for_save_type(tp_key, header))
 
         meta_row.addStretch()
-        meta_row.addWidget(CaptionLabel(
-            f"{t('backup.last_backup')}: {records[0].display_time}" if records else "", header
+        meta_row.addWidget(_meta(
+            f"{t('backup.last_backup')}: {records[0].display_time}" if records else ""
         ))
         title_col.addLayout(meta_row)
 

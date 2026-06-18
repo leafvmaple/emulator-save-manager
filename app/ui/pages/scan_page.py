@@ -165,10 +165,10 @@ class _GameSaveCard(CardWidget):
 
         # -- Top summary row (always visible) --
         self._summary = QWidget(self)
-        self._summary.setFixedHeight(94)
+        self._summary.setFixedHeight(78)
         root = QHBoxLayout(self._summary)
-        root.setContentsMargins(0, 4, 0, 4)
-        root.setSpacing(14)
+        root.setContentsMargins(0, 2, 0, 2)
+        root.setSpacing(theme.GAP_MD)
 
         # Icon — cover art > plugin emulator icon > generic
         self._icon_label = QLabel(self)
@@ -192,7 +192,7 @@ class _GameSaveCard(CardWidget):
         row1 = QHBoxLayout()
         row1.setSpacing(8)
         title = StrongBodyLabel(display_name, self)
-        setFont(title, 13, QFont.Weight.DemiBold)
+        setFont(title, 14, QFont.Weight.DemiBold)
         row1.addWidget(title)
 
         emu_label = CaptionLabel(ref.emulator, self)
@@ -216,10 +216,17 @@ class _GameSaveCard(CardWidget):
         row2.addStretch()
         info.addLayout(row2)
 
-        # Row 3: meta
+        # Row 3: meta — muted so the title + CRC accent carry the emphasis
         row3 = QHBoxLayout()
-        row3.setSpacing(14)
-        row3.addWidget(CaptionLabel(f"ID: {game_id}", self))
+        row3.setSpacing(theme.GAP_MD)
+        muted = f"color:{theme.text_muted()};"
+
+        def _meta(text: str) -> CaptionLabel:
+            lbl = CaptionLabel(text, self)
+            lbl.setStyleSheet(muted)
+            return lbl
+
+        row3.addWidget(_meta(f"ID: {game_id}"))
 
         crc = ref.crc32
         for s in saves:
@@ -232,17 +239,17 @@ class _GameSaveCard(CardWidget):
             row3.addWidget(crc_label)
 
         total_size = sum(s.total_size for s in saves)
-        row3.addWidget(CaptionLabel(_format_size(total_size), self))
+        row3.addWidget(_meta(_format_size(total_size)))
 
         file_count = sum(len(s.save_files) for s in saves)
-        row3.addWidget(CaptionLabel(f"{file_count} {t('scan.files')}", self))
+        row3.addWidget(_meta(f"{file_count} {t('scan.files')}"))
 
         last_mod = max(
             (s.last_modified for s in saves if s.last_modified),
             default=None,
         )
         if last_mod:
-            row3.addWidget(CaptionLabel(last_mod.strftime("%Y/%m/%d %H:%M"), self))
+            row3.addWidget(_meta(last_mod.strftime("%Y/%m/%d %H:%M")))
         row3.addStretch()
         info.addLayout(row3)
 
@@ -541,8 +548,9 @@ class ScanPage(QWidget):
         self._scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         self._scroll_inner = QWidget()
         self._card_layout = QVBoxLayout(self._scroll_inner)
-        self._card_layout.setContentsMargins(8, 8, 8, 8)
-        self._card_layout.setSpacing(6)
+        self._card_layout.setContentsMargins(theme.GAP_XS, theme.GAP_XS,
+                                             theme.GAP_XS, theme.GAP_XS)
+        self._card_layout.setSpacing(theme.GAP_SM)
         self._card_layout.addStretch()
         self._scroll.setWidget(self._scroll_inner)
         page.addWidget(self._scroll, stretch=1)

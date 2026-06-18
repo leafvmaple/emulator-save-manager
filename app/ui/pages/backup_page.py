@@ -130,7 +130,7 @@ class _GameCard(CardWidget):
     ) -> None:
         super().__init__(parent)
         self.saves = saves
-        self.setFixedHeight(110)
+        self.setFixedHeight(92)
 
         ref = saves[0]
         display_name = ref.game_name
@@ -141,7 +141,7 @@ class _GameCard(CardWidget):
 
         root = QHBoxLayout(self)
         root.setContentsMargins(20, 12, 20, 12)
-        root.setSpacing(16)
+        root.setSpacing(theme.GAP_LG)
 
         # --- Checkbox ---
         self.cb = CheckBox(self)
@@ -202,9 +202,15 @@ class _GameCard(CardWidget):
         badge_row.addStretch()
         info_col.addLayout(badge_row)
 
-        # Meta row
+        # Meta row — muted so the title carries the emphasis
         meta_row = QHBoxLayout()
-        meta_row.setSpacing(16)
+        meta_row.setSpacing(theme.GAP_MD)
+        muted = f"color:{theme.text_muted()};"
+
+        def _meta(text: str) -> CaptionLabel:
+            lbl = CaptionLabel(text, self)
+            lbl.setStyleSheet(muted)
+            return lbl
 
         total_size = sum(s.total_size for s in saves)
         file_count = sum(len(s.save_files) for s in saves)
@@ -213,20 +219,14 @@ class _GameCard(CardWidget):
             default=None,
         )
 
-        meta_row.addWidget(CaptionLabel(
-            f"ID: {ref.game_id}", self
-        ))
-        meta_row.addWidget(CaptionLabel(
-            f"{t('scan.size')}: {_format_size(total_size)}", self
-        ))
-        meta_row.addWidget(CaptionLabel(
+        meta_row.addWidget(_meta(f"ID: {ref.game_id}"))
+        meta_row.addWidget(_meta(f"{t('scan.size')}: {_format_size(total_size)}"))
+        meta_row.addWidget(_meta(
             f"{file_count} {t('backup.file_group', type='', count=str(file_count)).strip()}"
-            if file_count > 1 else f"1 file", self
+            if file_count > 1 else "1 file"
         ))
         if last_mod:
-            meta_row.addWidget(CaptionLabel(
-                last_mod.strftime("%Y/%m/%d %H:%M"), self
-            ))
+            meta_row.addWidget(_meta(last_mod.strftime("%Y/%m/%d %H:%M")))
         meta_row.addStretch()
         info_col.addLayout(meta_row)
 
