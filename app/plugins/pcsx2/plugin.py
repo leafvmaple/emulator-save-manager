@@ -8,7 +8,7 @@ import struct
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import BinaryIO
+from typing import Callable
 
 from loguru import logger
 
@@ -30,6 +30,13 @@ PS2_SUPERBLOCK_OFFSET = 0
 # Directory entry structure (PS2 memory card filesystem)
 DIRENTRY_SIZE = 512  # Each directory entry is 512 bytes
 
+# File-based memory card extensions PCSX2 creates / accepts.  The default
+# cards are ``Mcd001.ps2`` / ``Mcd002.ps2`` (8 MB PS2 images); the rest are
+# PS1-card formats.  Folder-type cards are directories handled separately.
+_MEMCARD_FILE_EXTS = {
+    ".ps2", ".mcr", ".mcd", ".mc2", ".bin", ".ps1", ".psx", ".gme", ".vgs", ".vmp",
+}
+
 # Pattern for save state filenames: SERIAL (CRC32).slot.p2s
 _SAVESTATE_RE = re.compile(
     r'^([A-Z]{4}-\d{5})\s*\(([0-9A-Fa-f]{8})\)'
@@ -40,6 +47,9 @@ _SAVESTATE_RE = re.compile(
 # MemoryCardFolder.cpp).  We mirror that with a regex search so serials
 # are extracted regardless of prefix/suffix.
 _SERIAL_RE = re.compile(r'([A-Z]{4}-\d{5})')
+
+# Resolves a game serial → localized display name (None if unknown).
+NameLookup = Callable[[str], "str | None"] | None
 
 
 def _read_ps2_superblock(data: bytes) -> dict | None:
@@ -130,19 +140,25 @@ def _read_root_directory_entries(data: bytes, superblock: dict) -> list[dict]:
         e_mode = struct.unpack_from("<I", entry_data, 0)[0]
         e_length = struct.unpack_from("<I", entry_data, 4)[0]
 
-        # Check if entry is a used directory (game save folders are directories)
-        # Mode bit 0x8427 = exists | directory | readable | writable | executable
-        if not (e_mode & 0x8000):  # not in use
+        # Root-level game saves are *used directories*.  Require both the
+        # in-use (0x8000) and directory (0x0020) flags — a contiguous read
+        # that doesn't follow the FAT can otherwise stumble into file/garbage
+        # clusters whose bytes happen to set 0x8000.
+        # (Mode 0x8427 = exists | directory | rwx | … for a real save dir.)
+        if (e_mode & 0x8000) == 0 or (e_mode & 0x0020) == 0:
             continue
 
-        # Entry name starts at offset 0x20 (32) and is up to 32 bytes
-        raw_name = entry_data[0x20:0x40]
+        # The 32-byte entry name lives at offset 0x40 (the 0x20 region is the
+        # ``attr`` word + reserved bytes — reading there yields empty names).
+        raw_name = entry_data[0x40:0x60]
         try:
             name = raw_name.split(b"\x00", 1)[0].decode("ascii", errors="ignore").strip()
         except Exception:
             name = ""
 
-        if name and name not in (".", ".."):
+        # Skip empties, dot dirs, and anything non-printable (a contiguous read
+        # that outran the real directory clusters lands on garbage).
+        if name and name not in (".", "..") and name.isprintable():
             # Cluster of this entry's first data
             e_cluster = struct.unpack_from("<I", entry_data, 0x10)[0]
             entries.append({
@@ -176,14 +192,70 @@ def _extract_game_id_from_dirname(dirname: str) -> str:
     return dirname
 
 
-def _scan_memcard_file(memcard_path: Path) -> list[GameSave]:
-    """Parse a PS2 memory card image file and extract game saves."""
-    saves: list[GameSave] = []
+# System-data folders PS2 cards keep for BIOS/config — not game saves.
+_SYSTEM_DIR_PREFIXES = (
+    "BADATA-SYSTEM", "BIDATA-SYSTEM", "BEDATA-SYSTEM",
+    "BWDATA-SYSTEM", "BJDATA-SYSTEM",
+)
+
+
+def _card_game_serials(raw: bytes, superblock: dict) -> list[str]:
+    """Return the distinct game serials whose saves live on this card."""
+    serials: list[str] = []
+    for entry in _read_root_directory_entries(raw, superblock):
+        dirname = entry["name"]
+        if dirname.startswith(_SYSTEM_DIR_PREFIXES) or dirname.startswith("!"):
+            continue
+        serial = _extract_game_id_from_dirname(dirname)
+        if serial not in serials:
+            serials.append(serial)
+    return serials
+
+
+def _build_card_name(
+    stem: str,
+    serials: list[str],
+    name_lookup: NameLookup = None,
+) -> str:
+    """Human-readable label for a whole memory card.
+
+    Leads with the contained game(s) (localized when known) and appends the
+    card file's stem so two cards holding the same game stay distinguishable::
+
+        Super Robot Taisen OG - Original Generations (Mcd001)
+        Mcd002                                    # empty / unparsable
+    """
+    names: list[str] = []
+    for serial in serials:
+        disp = name_lookup(serial) if name_lookup else None
+        disp = disp or serial
+        if disp not in names:
+            names.append(disp)
+    if not names:
+        return stem
+    shown = ", ".join(names[:3])
+    if len(names) > 3:
+        shown += f" +{len(names) - 3}"
+    return f"{shown} ({stem})"
+
+
+def _scan_memcard_file(
+    memcard_path: Path,
+    name_lookup: NameLookup = None,
+) -> list[GameSave]:
+    """Parse a file-based memory card into a single whole-card :class:`GameSave`.
+
+    A file card (``Mcd001.ps2``, PS1 ``.mcr`` …) is one filesystem image, so
+    backup/restore must treat the *entire file* as one atomic unit — restoring
+    a single game would silently revert every other save on the card.  We still
+    read the directory to surface the contained game serials in the label.
+    Unformatted / blank cards (all ``0xFF``) yield no saves.
+    """
     try:
         raw = memcard_path.read_bytes()
     except Exception as e:
         logger.warning("Cannot read memory card {}: {}", memcard_path, e)
-        return saves
+        return []
 
     # Strip ECC if present
     if _has_ecc(len(raw)):
@@ -191,66 +263,28 @@ def _scan_memcard_file(memcard_path: Path) -> list[GameSave]:
 
     superblock = _read_ps2_superblock(raw)
     if superblock is None:
-        # Check for PS1 memory card
         if raw[:2] == PS1_MEMCARD_MAGIC:
-            logger.debug("PS1 memory card detected: {}", memcard_path)
-            # Basic PS1 detection — treat the whole card as one save
-            stat = memcard_path.stat()
-            saves.append(GameSave(
-                emulator="PCSX2",
-                game_name=memcard_path.stem,
-                game_id=memcard_path.stem,
-                platform="PS1",
-                save_files=[SaveFile(
-                    path=memcard_path,
-                    save_type=SaveType.MEMCARD,
-                    size=stat.st_size,
-                    modified=datetime.fromtimestamp(stat.st_mtime),
-                )],
-            ))
+            platform_name, serials = "PS1", []
         else:
-            logger.debug("Unknown memory card format: {}", memcard_path)
-        return saves
-
-    # Parse directory entries to find individual game saves
-    entries = _read_root_directory_entries(raw, superblock)
-    if not entries:
-        # If parsing fails, treat the whole card as one unit
-        stat = memcard_path.stat()
-        saves.append(GameSave(
-            emulator="PCSX2",
-            game_name=memcard_path.stem,
-            game_id=memcard_path.stem,
-            platform="PS2",
-            save_files=[SaveFile(
-                path=memcard_path,
-                save_type=SaveType.MEMCARD,
-                size=stat.st_size,
-                modified=datetime.fromtimestamp(stat.st_mtime),
-            )],
-        ))
-        return saves
+            logger.debug("Blank or unknown memory card, skipping: {}", memcard_path)
+            return []
+    else:
+        platform_name = "PS2"
+        serials = _card_game_serials(raw, superblock)
 
     stat = memcard_path.stat()
-    for entry in entries:
-        dirname = entry["name"]
-        # Skip system entries
-        if dirname.startswith("BADATA-SYSTEM") or dirname.startswith("!"):
-            continue
-        game_id = _extract_game_id_from_dirname(dirname)
-        saves.append(GameSave(
-            emulator="PCSX2",
-            game_name=dirname,
-            game_id=game_id,
-            platform="PS2",
-            save_files=[SaveFile(
-                path=memcard_path,
-                save_type=SaveType.MEMCARD,
-                size=stat.st_size,
-                modified=datetime.fromtimestamp(stat.st_mtime),
-            )],
-        ))
-    return saves
+    return [GameSave(
+        emulator="PCSX2",
+        game_name=_build_card_name(memcard_path.stem, serials, name_lookup),
+        game_id=memcard_path.stem,   # card-slot identity (stable across devices)
+        platform=platform_name,
+        save_files=[SaveFile(
+            path=memcard_path,
+            save_type=SaveType.MEMCARD,
+            size=stat.st_size,
+            modified=datetime.fromtimestamp(stat.st_mtime),
+        )],
+    )]
 
 
 def _scan_folder_memcard(folder_path: Path) -> list[GameSave]:
@@ -291,6 +325,28 @@ def _scan_folder_memcard(folder_path: Path) -> list[GameSave]:
             platform="PS2",
             save_files=save_files,
         ))
+    return saves
+
+
+def _scan_memcards_dir(
+    memcards_dir: Path,
+    name_lookup: NameLookup = None,
+) -> list[GameSave]:
+    """Scan a PCSX2 ``memcards`` directory for every card it holds.
+
+    Handles both card layouts PCSX2 supports:
+
+    * **File cards** — single image files (``Mcd001.ps2``, PS1 ``.mcr`` …).
+      These are the default and were previously skipped entirely.
+    * **Folder cards** — directories containing a ``_pcsx2_superblock``.
+    """
+    saves: list[GameSave] = []
+    for item in memcards_dir.iterdir():
+        if item.is_dir():
+            if (item / "_pcsx2_superblock").exists():
+                saves.extend(_scan_folder_memcard(item))
+        elif item.is_file() and item.suffix.lower() in _MEMCARD_FILE_EXTS:
+            saves.extend(_scan_memcard_file(item, name_lookup))
     return saves
 
 
@@ -458,13 +514,16 @@ class PCSX2Plugin(EmulatorPlugin):
         all_saves: list[GameSave] = []
         dirs = self.get_save_directories(emulator_info)
 
+        # File-card labels resolve contained serials → localized game names.
+        from app.i18n import get_current_language
+        lang = get_current_language()
+        name_lookup = lambda serial: self.get_display_name(serial, lang)
+
         # Scan memory cards
         memcards_dir = dirs.get("memcards")
         if memcards_dir and memcards_dir.exists():
             logger.info("Scanning PCSX2 memory cards in {}", memcards_dir)
-            for item in memcards_dir.iterdir():
-                if item.is_dir() and (item / "_pcsx2_superblock").exists():
-                    all_saves.extend(_scan_folder_memcard(item))
+            all_saves.extend(_scan_memcards_dir(memcards_dir, name_lookup))
 
         # Scan save states
         sstates_dir = dirs.get("savestates")
@@ -476,9 +535,7 @@ class PCSX2Plugin(EmulatorPlugin):
         if custom_paths:
             for cp in custom_paths:
                 if cp.is_dir():
-                    for item in cp.iterdir():
-                        if item.is_dir() and (item / "_pcsx2_superblock").exists():
-                            all_saves.extend(_scan_folder_memcard(item))
+                    all_saves.extend(_scan_memcards_dir(cp, name_lookup))
 
         # --- Merge CRC32 across save types for the same serial ---
         crc_map: dict[str, str] = {}
