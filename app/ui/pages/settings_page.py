@@ -84,6 +84,9 @@ class _AboutCard(CardWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        # A custom CardWidget inside a SettingCardGroup won't auto-size — it
+        # collapses to a strip unless given an explicit height.
+        self.setFixedHeight(96)
 
         root = QHBoxLayout(self)
         root.setContentsMargins(20, 16, 20, 16)
