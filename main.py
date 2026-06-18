@@ -65,6 +65,7 @@ def main() -> None:
     window.home_page.set_backup_manager(backup_mgr)
     window.scan_page.set_scanner(scanner)
     window.scan_page.set_icon_provider(icon_provider)
+    window.scan_page.set_cache_file(config.data_dir / "scan_cache.json")
     window.backup_page.set_backup_manager(backup_mgr)
     window.backup_page.set_icon_provider(icon_provider)
     window.restore_page.set_managers(backup_mgr, restore_mgr)
@@ -76,6 +77,9 @@ def main() -> None:
 
     # Connect scan → backup page
     window.scan_page.saves_updated.connect(window.backup_page.update_saves)
+
+    # Restore the previous session's scan so the UI isn't empty on launch.
+    window.scan_page.load_cache()
 
     window.show()
     logger.info("Window shown, entering event loop")

@@ -96,8 +96,6 @@ def _backup_types(record: BackupRecord) -> list[str]:
         return []
 
 
-
-
 # -----------------------------------------------------------------------
 # Label editor dialog
 # -----------------------------------------------------------------------
@@ -359,7 +357,6 @@ class _VersionCard(SimpleCardWidget):
         root.addWidget(delete_btn)
 
 
-
 # -----------------------------------------------------------------------
 # Game card
 # -----------------------------------------------------------------------
@@ -547,6 +544,12 @@ class RestorePage(QWidget):
     def set_managers(self, backup_manager, restore_manager) -> None:  # noqa: ANN001
         self._backup_manager = backup_manager
         self._restore_manager = restore_manager
+        self._refresh_backups()  # backups live on disk — load them immediately
+
+    def showEvent(self, e) -> None:  # noqa: ANN001
+        # Refresh each time the page is shown so newly-created backups appear.
+        super().showEvent(e)
+        self._refresh_backups()
 
     def set_icon_provider(self, provider: GameIconProvider) -> None:
         self._icon_provider = provider

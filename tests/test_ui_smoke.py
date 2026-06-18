@@ -185,6 +185,41 @@ def test_restore_select_dialog_builds(qtbot, cfg):
     assert dlg.selected_indices == {0, 1}
 
 
+def test_scan_page_loads_cache(qtbot, cfg, tmp_path):
+    """A cached scan repopulates the page and re-emits saves_updated on launch."""
+    from app.ui.pages.scan_page import ScanPage
+    from app.core import scan_cache
+    from app.models.emulator import EmulatorInfo
+    from app.models.game_save import GameSave, SaveFile, SaveType
+
+    cache = tmp_path / "scan_cache.json"
+    scan_cache.save_scan(
+        cache,
+        [EmulatorInfo("PCSX2", Path("C:/p"), Path("C:/d"), supported_platforms=["PS2"])],
+        [GameSave("PCSX2", "Game", "Mcd001",
+                  [SaveFile(Path("C:/d/Mcd001.ps2"), SaveType.MEMCARD, 100, datetime.now())],
+                  platform="PS2")],
+    )
+
+    page = ScanPage()
+    qtbot.addWidget(page)
+    page.set_cache_file(cache)
+    with qtbot.waitSignal(page.saves_updated, timeout=2000):
+        assert page.load_cache() is True
+    assert len(page.get_saves()) == 1
+    assert len(page.get_emulators()) == 1
+
+
+def test_scan_page_no_cache_is_noop(qtbot, cfg, tmp_path):
+    from app.ui.pages.scan_page import ScanPage
+
+    page = ScanPage()
+    qtbot.addWidget(page)
+    page.set_cache_file(tmp_path / "absent.json")
+    assert page.load_cache() is False
+    assert page.get_saves() == []
+
+
 def test_diff_dialog_builds(qtbot, cfg, make_game_save, tmp_path):
     from PySide6.QtWidgets import QWidget
     from app.core.backup import BackupManager

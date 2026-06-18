@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, QThread, QPoint
 from PySide6.QtGui import QFont, QPixmap
@@ -32,6 +33,7 @@ from app.i18n import t
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveType
 from app.core.game_icon import GameIconProvider, IconDownloadWorker, get_plugin_icon
+from app.core import scan_cache
 from app.ui import theme
 from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
@@ -462,6 +464,7 @@ class ScanPage(QWidget):
         self._icon_provider: GameIconProvider | None = None
         self._game_cards: list[_GameSaveCard] = []
         self._emu_cards: list[_EmulatorCard] = []
+        self._cache_file: Path | None = None
         self._init_ui()
 
     def set_scanner(self, scanner) -> None:  # noqa: ANN001
@@ -469,6 +472,27 @@ class ScanPage(QWidget):
 
     def set_icon_provider(self, provider: GameIconProvider) -> None:
         self._icon_provider = provider
+
+    def set_cache_file(self, path: Path) -> None:
+        """Where to persist / restore the last scan result."""
+        self._cache_file = path
+
+    def load_cache(self) -> bool:
+        """Populate the page from the cached scan, if any.  Returns True if it had data."""
+        if self._cache_file is None:
+            return False
+        emulators, saves = scan_cache.load_scan(self._cache_file)
+        if not emulators and not saves:
+            return False
+        self._populate(emulators, saves)
+        self._status_label.setText(
+            t("scan.found_emulators", count=str(len(emulators)))
+        )
+        return True
+
+    def _save_cache(self) -> None:
+        if self._cache_file is not None:
+            scan_cache.save_scan(self._cache_file, self._emulators, self._saves)
 
     def start_scan(self) -> None:
         """Public entry point for triggering a scan (e.g. on startup)."""
@@ -608,26 +632,15 @@ class ScanPage(QWidget):
             self._cancel_btn.setEnabled(False)
             self._status_label.setText(t("common.canceling"))
 
-    def _on_scan_finished(self, emulators: list, saves: list) -> None:
-        cancelled = self._worker is not None and self._worker.isInterruptionRequested()
+    def _populate(self, emulators: list, saves: list) -> None:
+        """Apply scan results (live or cached) to the UI and notify listeners."""
         self._emulators = emulators
         self._saves = saves
-        self._scan_btn.setEnabled(True)
-        self._scan_btn.setText(t("scan.start_scan"))
-        self._cancel_btn.hide()
-        self._progress.hide()
-        if cancelled:
-            self._status_label.setText(t("common.cancelled"))
-        else:
-            self._status_label.setText(
-                f"{t('scan.found_emulators', count=str(len(emulators)))}"
-            )
-        # Register emulator data paths for icon look-up
+
+        # Register emulator data paths + per-plugin cover/thumbnail resolvers.
         if self._icon_provider:
             for emu in emulators:
                 self._icon_provider.register_emulator(emu.name, emu.data_path)
-
-            # Register per-plugin cover URL resolvers
             if self._scanner is not None:
                 pm = getattr(self._scanner, "_pm", None)
                 if pm is not None:
@@ -650,6 +663,23 @@ class ScanPage(QWidget):
         self._refresh_game_cards()
         self._start_icon_download()
         self.saves_updated.emit(saves)
+
+    def _on_scan_finished(self, emulators: list, saves: list) -> None:
+        cancelled = self._worker is not None and self._worker.isInterruptionRequested()
+        self._scan_btn.setEnabled(True)
+        self._scan_btn.setText(t("scan.start_scan"))
+        self._cancel_btn.hide()
+        self._progress.hide()
+        if cancelled:
+            self._status_label.setText(t("common.cancelled"))
+        else:
+            self._status_label.setText(
+                f"{t('scan.found_emulators', count=str(len(emulators)))}"
+            )
+
+        self._populate(emulators, saves)
+        if not cancelled:  # don't persist a partial/cancelled scan
+            self._save_cache()
 
         if cancelled:
             InfoBar.warning(
