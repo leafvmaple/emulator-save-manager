@@ -1,0 +1,4 @@
+# Lint config — pyflakes (F) rules only: real problems such as unused imports,
+# undefined names and dead variables, not stylistic noise. Enforced in CI.
+[lint]
+select = ["F"]

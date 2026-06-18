@@ -7,11 +7,10 @@ An *About* section is added at the bottom.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QSizePolicy, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QLabel,
 )
 from qfluentwidgets import (
     CaptionLabel, StrongBodyLabel,

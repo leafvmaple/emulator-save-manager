@@ -2,13 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel,
-)
 from qfluentwidgets import (
     MessageBoxBase, SubtitleLabel, BodyLabel, RadioButton,
-    PrimaryPushButton, PushButton,
 )
 
 from app.i18n import t

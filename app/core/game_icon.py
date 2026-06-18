@@ -15,13 +15,12 @@ from __future__ import annotations
 
 import re
 import shutil
-import sys
 import urllib.request
 from pathlib import Path
 from typing import Sequence
 
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QImage
+from PySide6.QtGui import QPixmap, QPainter, QPainterPath
 from loguru import logger
 
 

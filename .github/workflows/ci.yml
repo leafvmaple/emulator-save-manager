@@ -1,8 +1,10 @@
 # ------------------------------------------------------------------
 # GitHub Actions — CI quality gate
-#   • Runs the pytest suite on every push / PR
-#   • Windows runner: matches the app's real target platform and avoids
-#     headless-Qt system-library setup needed on Linux
+#   • Lint (ruff, pyflakes rules) — catches unused imports / dead code
+#   • Runs the pytest suite on Windows AND Linux:
+#       - Windows matches the app's real primary target
+#       - Linux exercises the cross-platform code paths (path detection,
+#         offscreen Qt) that the Windows-only dev box can't verify
 # ------------------------------------------------------------------
 
 name: CI
@@ -24,9 +26,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+      - run: ruff check app/ tests/ main.py
+
   test:
-    name: Test (Windows)
-    runs-on: windows-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,6 +56,15 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             requirements-dev.txt
+
+      - name: Install Linux Qt runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 libgl1 libxkbcommon0 libdbus-1-3 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0
 
       - name: Install dependencies
         run: |

@@ -11,27 +11,23 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, QThread, QPoint
 from PySide6.QtGui import QFont, QPainter, QPen, QColor
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 )
 from qfluentwidgets import (
     SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
-    PrimaryPushButton, PushButton, TransparentToolButton,
-    CardWidget, SimpleCardWidget, SmoothScrollArea, CheckBox,
+    PushButton, TransparentToolButton,
+    CardWidget, SmoothScrollArea, CheckBox,
     FluentIcon as FIF, InfoBar, InfoBarPosition, InfoBadge,
-    MessageBox, MessageBoxBase, LineEdit, ProgressRing, IconWidget,
-    isDarkTheme, setFont,
+    MessageBox, MessageBoxBase, LineEdit, ProgressRing, isDarkTheme, setFont,
 )
-from loguru import logger
 
 from app.i18n import t
 from app.models.backup_record import BackupRecord
-from app.models.game_save import SaveType
-from app.core.game_icon import GameIconProvider, get_plugin_icon
+from app.core.game_icon import GameIconProvider
 from app.ui import theme
 from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader

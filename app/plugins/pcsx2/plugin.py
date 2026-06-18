@@ -125,7 +125,6 @@ def _read_root_directory_entries(data: bytes, superblock: dict) -> list[dict]:
         return entries
 
     dot_entry_data = data[root_offset : root_offset + DIRENTRY_SIZE]
-    mode = struct.unpack_from("<I", dot_entry_data, 0)[0] if len(dot_entry_data) >= 4 else 0
     num_entries = struct.unpack_from("<I", dot_entry_data, 4)[0] if len(dot_entry_data) >= 8 else 0
 
     if num_entries == 0 or num_entries > 1000:

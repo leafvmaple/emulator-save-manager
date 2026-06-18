@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout
 from qfluentwidgets import (
     CardWidget, BodyLabel, CaptionLabel, ProgressBar, setFont,

@@ -9,25 +9,22 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from PySide6.QtCore import Qt, Signal, QThread, QSize
+from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QFont, QColor, QPainter, QPen
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
-    QGraphicsDropShadowEffect,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 )
 from qfluentwidgets import (
     CaptionLabel, StrongBodyLabel,
-    PrimaryPushButton, PushButton, TransparentToolButton,
-    CardWidget, SmoothScrollArea, FluentIcon as FIF,
+    PrimaryPushButton, PushButton, CardWidget, SmoothScrollArea, FluentIcon as FIF,
     InfoBar, InfoBarPosition, InfoBadge,
-    CheckBox, ProgressRing, ToolTipFilter, ToolTipPosition,
-    setFont, FlowLayout, IconWidget,
+    CheckBox, ProgressRing, setFont,
 )
 from loguru import logger
 
 from app.i18n import t
-from app.models.game_save import GameSave, SaveType
-from app.core.game_icon import GameIconProvider, get_plugin_icon
+from app.models.game_save import GameSave
+from app.core.game_icon import GameIconProvider
 from app.ui import theme
 from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader

@@ -6,3 +6,5 @@ pytest-qt>=4.4
 # Local WebDAV server for the sync integration test.
 wsgidav>=4.0
 cheroot>=10.0
+# Linting (CI quality gate).
+ruff>=0.5

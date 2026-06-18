@@ -7,7 +7,6 @@ are actually exercised rather than skipped.
 
 from __future__ import annotations
 
-import pytest
 
 from app.core import path_resolver as pr
 

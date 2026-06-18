@@ -16,18 +16,17 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal, QThread, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QPixmap
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 )
 from qfluentwidgets import (
     BodyLabel, CaptionLabel, StrongBodyLabel,
     PrimaryPushButton, PushButton, TransparentToolButton,
-    CardWidget, SimpleCardWidget, SmoothScrollArea,
+    CardWidget, SmoothScrollArea,
     SingleDirectionScrollArea,
     FluentIcon as FIF, InfoBar, InfoBarPosition,
     ProgressRing, setFont, RoundMenu, Action,
     IconWidget, InfoBadge, SearchLineEdit,
 )
-from loguru import logger
 
 from app.i18n import t
 from app.models.emulator import EmulatorInfo
