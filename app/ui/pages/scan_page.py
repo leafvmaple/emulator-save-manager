@@ -40,6 +40,7 @@ from app.ui.components.page_header import PageHeader
 from app.ui.components.empty_state import EmptyState
 from app.ui.components.avatar import letter_avatar
 from app.ui.components.skeleton import SkeletonCard
+from app.ui.components.elevation import add_hover_elevation
 
 
 # -----------------------------------------------------------------------
@@ -156,6 +157,7 @@ class _GameSaveCard(CardWidget):
         self.emulator = saves[0].emulator
         self._expanded = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_hover_elevation(self)
 
         ref = saves[0]
         display_name = ref.game_name

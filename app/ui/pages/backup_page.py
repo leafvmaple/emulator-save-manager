@@ -33,6 +33,7 @@ from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
 from app.ui.components.empty_state import EmptyState
 from app.ui.components.avatar import letter_avatar
+from app.ui.components.elevation import add_hover_elevation
 
 
 # -----------------------------------------------------------------------
@@ -134,6 +135,7 @@ class _GameCard(CardWidget):
         self.saves = saves
         self._selected = False
         self.setFixedHeight(92)
+        add_hover_elevation(self)
 
         ref = saves[0]
         display_name = ref.game_name
