@@ -53,6 +53,10 @@ class MainWindow(FluentWindow):
         except Exception:  # pragma: no cover - platform/DWM dependent
             pass
 
+        # The default expanded navigation rail (322px) is far too wide for our
+        # short labels — tighten it so it doesn't eat the content area.
+        self.navigationInterface.setExpandWidth(190)
+
         # Center on screen
         desktop = QApplication.primaryScreen().availableGeometry()
         x = (desktop.width() - self.width()) // 2

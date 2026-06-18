@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from PySide6.QtCore import Qt, Signal, QThread, QSize
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtGui import QFont, QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
     QGraphicsDropShadowEffect,
@@ -130,6 +130,7 @@ class _GameCard(CardWidget):
     ) -> None:
         super().__init__(parent)
         self.saves = saves
+        self._selected = False
         self.setFixedHeight(92)
 
         ref = saves[0]
@@ -145,7 +146,7 @@ class _GameCard(CardWidget):
 
         # --- Checkbox ---
         self.cb = CheckBox(self)
-        self.cb.stateChanged.connect(lambda _: self.checked_changed.emit())
+        self.cb.stateChanged.connect(self._on_check)
         root.addWidget(self.cb, 0, Qt.AlignmentFlag.AlignVCenter)
 
         # --- Icon (cover art or fallback) ---
@@ -231,6 +232,25 @@ class _GameCard(CardWidget):
         info_col.addLayout(meta_row)
 
         root.addLayout(info_col, 1)
+
+    def _on_check(self, _state: int) -> None:
+        self._selected = self.cb.isChecked()
+        self.update()
+        self.checked_changed.emit()
+
+    def paintEvent(self, e) -> None:  # noqa: ANN001
+        super().paintEvent(e)
+        if not self._selected:
+            return
+        # A 2px accent outline marks a selected card.
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor(theme.accent()))
+        pen.setWidth(2)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        r = self.getBorderRadius() if hasattr(self, "getBorderRadius") else theme.RADIUS_MD
+        p.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), r, r)
 
     @property
     def is_checked(self) -> bool:
