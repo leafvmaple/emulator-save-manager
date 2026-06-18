@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect,
 )
 from qfluentwidgets import (
-    SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
+    BodyLabel, CaptionLabel, StrongBodyLabel,
     PrimaryPushButton, PushButton, TransparentToolButton,
     CardWidget, SmoothScrollArea, FluentIcon as FIF,
     InfoBar, InfoBarPosition, InfoBadge,
@@ -29,6 +29,8 @@ from app.i18n import t
 from app.models.game_save import GameSave, SaveType
 from app.core.game_icon import GameIconProvider, get_plugin_icon
 from app.ui import theme
+from app.ui.components.badge import TypeBadge
+from app.ui.components.page_header import PageHeader
 
 
 # -----------------------------------------------------------------------
@@ -107,26 +109,6 @@ def _format_size(size_bytes: int) -> str:
 
 def _game_group_key(save: GameSave) -> str:
     return f"{save.emulator}:{save.game_id}"
-
-
-# -----------------------------------------------------------------------
-# Badge Widget
-# -----------------------------------------------------------------------
-
-class _TypeBadge(QLabel):
-    """A small coloured pill that indicates a save type."""
-
-    def __init__(self, text: str, color: str, parent: QWidget | None = None) -> None:
-        super().__init__(text, parent)
-        self.setFixedHeight(20)
-        setFont(self, 11)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pad = max(24, self.fontMetrics().horizontalAdvance(text) + 16)
-        self.setFixedWidth(pad)
-        self.setStyleSheet(
-            f"background:{color}; color:{theme.on_accent()}; border-radius:10px; "
-            f"padding: 0 6px; font-weight:500;"
-        )
 
 
 # -----------------------------------------------------------------------
@@ -216,8 +198,7 @@ class _GameCard(CardWidget):
             key=lambda x: x.value,
         )
         for st in all_types:
-            color = theme.status_fill(st.value)
-            badge_row.addWidget(_TypeBadge(t(f"save_type.{st.value}"), color, self))
+            badge_row.addWidget(TypeBadge.for_save_type(st.value, self))
         badge_row.addStretch()
         info_col.addLayout(badge_row)
 
@@ -323,11 +304,7 @@ class BackupPage(QWidget):
                                        theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V)
         page_layout.setSpacing(theme.GAP_MD)
 
-        title = SubtitleLabel(t("backup.title"), self)
-        desc = BodyLabel(t("backup.description"), self)
-        desc.setWordWrap(True)
-        page_layout.addWidget(title)
-        page_layout.addWidget(desc)
+        page_layout.addWidget(PageHeader(t("backup.title"), t("backup.description"), self))
 
         # Action bar
         av = Qt.AlignmentFlag.AlignVCenter

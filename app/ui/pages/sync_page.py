@@ -17,6 +17,7 @@ from app.i18n import t
 from app.core.sync import SyncResult
 from app.core.conflict import ConflictInfo, ConflictResolution
 from app.ui import theme
+from app.ui.components.page_header import PageHeader
 from app.ui.components.conflict_dialog import ConflictDialog, BatchConflictDialog
 
 
@@ -107,11 +108,7 @@ class SyncPage(QWidget):
                                   theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V)
         layout.setSpacing(theme.GAP_LG)
 
-        title = SubtitleLabel(t("sync.title"), self)
-        desc = BodyLabel(t("sync.description"), self)
-        desc.setWordWrap(True)
-        layout.addWidget(title)
-        layout.addWidget(desc)
+        layout.addWidget(PageHeader(t("sync.title"), t("sync.description"), self))
 
         # Status card
         self._status_card = CardWidget(self)

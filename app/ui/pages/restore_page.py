@@ -33,6 +33,8 @@ from app.models.backup_record import BackupRecord
 from app.models.game_save import SaveType
 from app.core.game_icon import GameIconProvider, get_plugin_icon
 from app.ui import theme
+from app.ui.components.badge import TypeBadge
+from app.ui.components.page_header import PageHeader
 
 
 class _RestoreWorker(QThread):
@@ -93,20 +95,6 @@ def _backup_types(record: BackupRecord) -> list[str]:
         return []
 
 
-class _TypeBadge(QLabel):
-    """Coloured pill badge for a save type."""
-
-    def __init__(self, text: str, color: str, parent: QWidget | None = None) -> None:
-        super().__init__(text, parent)
-        self.setFixedHeight(18)
-        setFont(self, 10)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pad = max(24, self.fontMetrics().horizontalAdvance(text) + 14)
-        self.setFixedWidth(pad)
-        self.setStyleSheet(
-            f"background:{color}; color:{theme.on_accent()}; "
-            f"border-radius:{theme.RADIUS_PILL}px; padding:0 5px; font-weight:500;"
-        )
 
 
 # -----------------------------------------------------------------------
@@ -462,8 +450,7 @@ class _GameBackupCard(CardWidget):
         # Type badges from latest backup
         types = _backup_types(records[0]) if records else []
         for tp_key in types:
-            color = theme.status_fill(tp_key)
-            meta_row.addWidget(_TypeBadge(t(f"save_type.{tp_key}"), color, header))
+            meta_row.addWidget(TypeBadge.for_save_type(tp_key, header))
 
         meta_row.addStretch()
         meta_row.addWidget(CaptionLabel(
@@ -568,11 +555,7 @@ class RestorePage(QWidget):
                                        theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V)
         page_layout.setSpacing(theme.GAP_MD)
 
-        title = SubtitleLabel(t("restore.title"), self)
-        desc = BodyLabel(t("restore.description"), self)
-        desc.setWordWrap(True)
-        page_layout.addWidget(title)
-        page_layout.addWidget(desc)
+        page_layout.addWidget(PageHeader(t("restore.title"), t("restore.description"), self))
 
         # Action bar
         av = Qt.AlignmentFlag.AlignVCenter

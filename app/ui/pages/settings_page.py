@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QSizePolicy, QLabel,
 )
 from qfluentwidgets import (
-    SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
+    CaptionLabel, StrongBodyLabel,
     SettingCardGroup, ComboBoxSettingCard, PushSettingCard,
     RangeSettingCard, SwitchSettingCard, FluentIcon as FIF,
     InfoBar, InfoBarPosition, setTheme, Theme,
@@ -32,6 +32,7 @@ from app.i18n import t, set_language
 from app.config import Config
 from app.core.game_icon import get_plugin_icon
 from app.ui import theme
+from app.ui.components.page_header import PageHeader
 
 
 # -----------------------------------------------------------------------
@@ -454,12 +455,8 @@ class SettingsPage(QWidget):
                                   theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V)
         layout.setSpacing(theme.GAP_XL)
 
-        # Title
-        title = SubtitleLabel(t("settings.title"), container)
-        desc = BodyLabel(t("settings.description"), container)
-        desc.setWordWrap(True)
-        layout.addWidget(title)
-        layout.addWidget(desc)
+        # Title + description
+        layout.addWidget(PageHeader(t("settings.title"), t("settings.description"), container))
 
         # --- General group ---
         general_group = SettingCardGroup(t("settings.general_group"), container)

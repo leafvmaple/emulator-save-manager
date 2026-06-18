@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
 )
 from qfluentwidgets import (
-    SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
+    BodyLabel, CaptionLabel, StrongBodyLabel,
     PrimaryPushButton, PushButton, TransparentToolButton,
     CardWidget, SimpleCardWidget, SmoothScrollArea,
     SingleDirectionScrollArea,
@@ -33,6 +33,8 @@ from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveType
 from app.core.game_icon import GameIconProvider, IconDownloadWorker, get_plugin_icon
 from app.ui import theme
+from app.ui.components.badge import TypeBadge
+from app.ui.components.page_header import PageHeader
 
 
 # -----------------------------------------------------------------------
@@ -80,22 +82,6 @@ def _format_size(size_bytes: int) -> str:
 # -----------------------------------------------------------------------
 # Small widgets
 # -----------------------------------------------------------------------
-
-class _TypeBadge(QLabel):
-    """Coloured pill badge for a save type."""
-
-    def __init__(self, text: str, color: str, parent: QWidget | None = None) -> None:
-        super().__init__(text, parent)
-        self.setFixedHeight(18)
-        setFont(self, 10)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pad = max(24, self.fontMetrics().horizontalAdvance(text) + 14)
-        self.setFixedWidth(pad)
-        self.setStyleSheet(
-            f"background:{color}; color:{theme.on_accent()}; "
-            f"border-radius:{theme.RADIUS_PILL}px; padding:0 5px; font-weight:500;"
-        )
-
 
 class _EmulatorCard(CardWidget):
     """Summary card for a detected emulator."""
@@ -226,8 +212,7 @@ class _GameSaveCard(CardWidget):
             key=lambda x: x.value,
         )
         for st in all_types:
-            color = theme.status_fill(st.value)
-            row2.addWidget(_TypeBadge(t(f"save_type.{st.value}"), color, self))
+            row2.addWidget(TypeBadge.for_save_type(st.value, self))
         row2.addStretch()
         info.addLayout(row2)
 
@@ -483,12 +468,8 @@ class ScanPage(QWidget):
                                 theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V)
         page.setSpacing(theme.GAP_MD)
 
-        # Title
-        title = SubtitleLabel(t("scan.title"), self)
-        desc = BodyLabel(t("scan.description"), self)
-        desc.setWordWrap(True)
-        page.addWidget(title)
-        page.addWidget(desc)
+        # Title + description
+        page.addWidget(PageHeader(t("scan.title"), t("scan.description"), self))
 
         # Action bar — search on the left, status + primary action on the right.
         # Everything is vertically centred so the button doesn't tower over the
