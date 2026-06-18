@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QSize, QTimer
-from PySide6.QtGui import QPalette
+from PySide6.QtGui import QPalette, QIcon
 from PySide6.QtWidgets import QApplication
 
 from qfluentwidgets import (
@@ -17,6 +17,7 @@ from qfluentwidgets import (
 
 from app.config import Config
 from app.i18n import t
+from app.assets import app_icon_path
 from app.ui.pages.home_page import HomePage
 from app.ui.pages.scan_page import ScanPage
 from app.ui.pages.backup_page import BackupPage
@@ -45,6 +46,7 @@ class MainWindow(FluentWindow):
 
     def _init_window(self) -> None:
         self.setWindowTitle(t("app.name"))
+        self.setWindowIcon(QIcon(str(app_icon_path())))
         self.setMinimumSize(QSize(960, 640))
         self.resize(1100, 720)
 

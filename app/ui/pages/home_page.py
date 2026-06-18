@@ -8,8 +8,8 @@ application rather than a single-purpose tool.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout
+from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel
 from qfluentwidgets import (
     TitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
     CardWidget, SimpleCardWidget, IconWidget, SmoothScrollArea,
@@ -18,6 +18,7 @@ from qfluentwidgets import (
 
 from app.i18n import t
 from app.version import get_app_version
+from app.assets import app_icon_path
 from app.ui import theme
 
 
@@ -121,17 +122,26 @@ class HomePage(QWidget):
                                 theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V)
         page.setSpacing(theme.GAP_LG)
 
-        # --- Hero ---
-        hero = QVBoxLayout()
-        hero.setSpacing(theme.GAP_XS)
-        hero.addWidget(TitleLabel(t("app.name"), container))
+        # --- Hero: logo + title / subtitle / version ---
+        hero = QHBoxLayout()
+        hero.setSpacing(theme.GAP_LG)
+        logo = QLabel(container)
+        logo.setFixedSize(56, 56)
+        logo.setScaledContents(True)
+        logo.setPixmap(QPixmap(str(app_icon_path())))
+        hero.addWidget(logo, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        hero_text = QVBoxLayout()
+        hero_text.setSpacing(theme.GAP_XS)
+        hero_text.addWidget(TitleLabel(t("app.name"), container))
         sub = BodyLabel(t("home.subtitle"), container)
         sub.setStyleSheet(f"color:{theme.text_secondary()};")
         sub.setWordWrap(True)
-        hero.addWidget(sub)
+        hero_text.addWidget(sub)
         ver = CaptionLabel(f"v{get_app_version()}", container)
         ver.setStyleSheet(f"color:{theme.text_muted()};")
-        hero.addWidget(ver)
+        hero_text.addWidget(ver)
+        hero.addLayout(hero_text, 1)
         page.addLayout(hero)
 
         # --- Overview stats ---

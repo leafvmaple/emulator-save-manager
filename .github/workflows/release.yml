@@ -234,17 +234,22 @@ jobs:
           # repo root is on sys.path and `app.*` is importable; otherwise
           # collect-* silently skips everything and ships a hollow binary
           # (no translations, no plugins).
+          # Windows exe gets the .ico; macOS/Linux use the runtime PNG icon.
+          ICON_FLAG=()
+          [ "${{ runner.os }}" = "Windows" ] && ICON_FLAG=(--icon app/resources/icon.ico)
           python -m PyInstaller \
             --noconfirm \
             --onefile \
             --windowed \
             --name "EmulatorSaveManager" \
+            "${ICON_FLAG[@]}" \
             --collect-submodules app.plugins \
             --collect-data app.plugins \
             --collect-data app.i18n \
             --collect-all keyring \
             --collect-submodules webdav4 \
             --add-data "VERSION${{ runner.os == 'Windows' && ';' || ':' }}." \
+            --add-data "app/resources/icon.png${{ runner.os == 'Windows' && ';' || ':' }}app/resources" \
             main.py 2>&1 | tee build.log
           # Guard: fail loudly if data collection was skipped.
           if grep -qiE "skipping data collection|Unable to find package" build.log; then

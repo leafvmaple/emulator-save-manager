@@ -57,6 +57,9 @@ def main() -> None:
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough,
     )
     app = QApplication(sys.argv)
+    from PySide6.QtGui import QIcon
+    from app.assets import app_icon_path
+    app.setWindowIcon(QIcon(str(app_icon_path())))
 
     # ---- 7. Main Window ----
     window = MainWindow(config)
