@@ -39,5 +39,15 @@ def test_content_hash_detects_renamed_entry(tmp_path):
     assert zip_content_hash(a) != zip_content_hash(b)
 
 
+def test_content_hash_ignores_backup_thumbnails(tmp_path):
+    a, b = tmp_path / "a.zip", tmp_path / "b.zip"
+    _make_zip(a, (2020, 1, 1, 0, 0, 0), content=b"DATA")
+    with zipfile.ZipFile(b, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("save/file.bin", b"DATA")
+        zf.writestr("thumbnails/000_slot0.png", b"DISPLAY-ONLY")
+
+    assert zip_content_hash(a) == zip_content_hash(b)
+
+
 def test_content_hash_missing_file_returns_empty(tmp_path):
     assert zip_content_hash(tmp_path / "does-not-exist.zip") == ""

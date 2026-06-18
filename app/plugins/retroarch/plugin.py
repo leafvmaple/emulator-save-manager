@@ -23,6 +23,7 @@ from pathlib import Path
 from loguru import logger
 
 from app.core.path_resolver import platform_data_dir_candidates
+from app.core.state_thumbnail import extract_state_thumbnail
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
 from app.plugins.base import EmulatorPlugin
@@ -196,13 +197,7 @@ class RetroArchPlugin(EmulatorPlugin):
         With "Save State Thumbnail Enable" on, RetroArch writes a PNG next to
         the state file at ``<state_path>.png``.
         """
-        sibling = save_path.with_name(save_path.name + ".png")
-        if sibling.is_file():
-            try:
-                return sibling.read_bytes()
-            except OSError as e:
-                logger.debug("Cannot read thumbnail {}: {}", sibling, e)
-        return None
+        return extract_state_thumbnail(save_path)
 
     def scan_saves(
         self,

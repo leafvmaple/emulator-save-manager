@@ -185,6 +185,35 @@ def test_backup_management_card_and_dialog(qtbot, cfg, tmp_path):
     assert dlg.label_text == "before boss"
 
 
+def test_thumbnail_hover_opens_preview_popup(qtbot):
+    from PySide6.QtCore import QByteArray, QBuffer, QEvent, QIODevice, QPoint
+    from PySide6.QtGui import QColor, QPixmap
+    from PySide6.QtWidgets import QApplication, QWidget
+    from app.ui.pages.restore_page import _ThumbnailLabel, _rounded_thumbnail_pixmap
+
+    source = QPixmap(320, 180)
+    source.fill(QColor("#107c10"))
+    data = QByteArray()
+    buffer = QBuffer(data)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    source.save(buffer, "PNG")
+
+    parent = QWidget()
+    parent.resize(180, 100)
+    qtbot.addWidget(parent)
+    preview = _rounded_thumbnail_pixmap(source, 72, 42)
+    label = _ThumbnailLabel(preview, bytes(data), parent)
+    label.move(20, 20)
+    label.show()
+    parent.show()
+
+    qtbot.mouseMove(label, QPoint(10, 10))
+    qtbot.waitUntil(lambda: label._popup is not None and label._popup.isVisible())
+
+    QApplication.sendEvent(label, QEvent(QEvent.Type.Leave))
+    qtbot.waitUntil(lambda: label._popup is not None and not label._popup.isVisible())
+
+
 def test_restore_select_dialog_builds(qtbot, cfg):
     from pathlib import Path
     from PySide6.QtWidgets import QWidget

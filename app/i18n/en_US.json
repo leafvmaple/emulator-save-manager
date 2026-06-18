@@ -111,6 +111,8 @@
         "note_placeholder": "Record progress, context or warnings for this backup",
         "important_checkpoint": "Mark as important checkpoint (exempt from auto-rotation)",
         "edit_checkpoint": "Edit checkpoint",
+        "state_preview": "Save-state screenshot",
+        "state_preview_open": "Click to enlarge save-state screenshot",
         "select_title": "Select saves to restore",
         "select_desc": "Check the items to restore from this backup.",
         "newer_local": "newer locally"

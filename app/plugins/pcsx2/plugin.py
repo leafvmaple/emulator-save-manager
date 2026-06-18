@@ -5,7 +5,6 @@ from __future__ import annotations
 import platform
 import re
 import struct
-import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
@@ -15,6 +14,7 @@ from loguru import logger
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
 from app.core.path_resolver import get_documents_dir, platform_data_dir_candidates
+from app.core.state_thumbnail import extract_state_thumbnail
 from app.plugins.base import EmulatorPlugin
 
 # PS2 memory card constants
@@ -570,13 +570,6 @@ class PCSX2Plugin(EmulatorPlugin):
         ``.p2s`` files are ZIP archives that contain a ``Screenshot.png``
         of the game at save time.  Returns its bytes, or ``None``.
         """
-        if save_path.suffix.lower() != ".p2s":
+        if not save_path.name.lower().endswith((".p2s", ".p2s.backup")):
             return None
-        try:
-            with zipfile.ZipFile(save_path, "r") as zf:
-                for name in zf.namelist():
-                    if name.lower().endswith(".png"):
-                        return zf.read(name)
-        except (zipfile.BadZipFile, OSError) as e:
-            logger.debug("No thumbnail in {}: {}", save_path, e)
-        return None
+        return extract_state_thumbnail(save_path)

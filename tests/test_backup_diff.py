@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import zipfile
+
 from app.core.backup import BackupManager
 from app.core.backup_diff import diff_backups
 
@@ -53,6 +55,19 @@ def test_diff_identical_backups_has_no_changes(cfg, make_game_save, tmp_path):
     d = diff_backups(rec1, rec2)
     assert not d.has_changes
     assert d.files and all(f.status == "unchanged" for f in d.files)
+
+
+def test_diff_ignores_backup_thumbnail_entries(cfg, make_game_save, tmp_path):
+    gs = make_game_save(tmp_path / "s", files={"a.bin": b"X"})
+    bm = BackupManager(cfg)
+    rec1 = bm.create_backup([gs])
+    rec2 = bm.create_backup([gs])
+
+    with zipfile.ZipFile(rec2.backup_path, "a") as zf:
+        zf.writestr("thumbnails/000_slot0.png", b"DISPLAY-ONLY")
+
+    d = diff_backups(rec1, rec2)
+    assert not d.has_changes
 
 
 def test_diff_folder_saves(cfg, tmp_path):

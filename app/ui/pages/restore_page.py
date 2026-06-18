@@ -13,9 +13,11 @@ import subprocess
 import sys
 
 from PySide6.QtCore import Qt, Signal, QThread, QPoint
-from PySide6.QtGui import QFont, QPainter, QPen, QColor
+from PySide6.QtGui import (
+    QColor, QFont, QGuiApplication, QPainter, QPainterPath, QPen, QPixmap,
+)
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
 )
 from qfluentwidgets import (
     SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
@@ -28,6 +30,7 @@ from qfluentwidgets import (
 from app.i18n import t
 from app.models.backup_record import BackupRecord
 from app.core.game_icon import GameIconProvider
+from app.core.state_thumbnail import read_backup_thumbnail
 from app.ui import theme
 from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
@@ -91,6 +94,133 @@ def _backup_types(record: BackupRecord) -> list[str]:
         return sorted({bp.get("type", "") for bp in data.get("backup_paths", [])} - {""})
     except Exception:
         return []
+
+
+def _backup_thumbnail_preview(
+    record: BackupRecord, width: int = 72, height: int = 42
+) -> tuple[QPixmap, bytes] | None:
+    """Return a rounded preview pixmap plus original image bytes."""
+    data = read_backup_thumbnail(record.backup_path)
+    if not data:
+        return None
+
+    pm = QPixmap()
+    if not pm.loadFromData(data) or pm.isNull():
+        return None
+    return _rounded_thumbnail_pixmap(pm, width, height), data
+
+
+def _rounded_thumbnail_pixmap(
+    src: QPixmap, width: int, height: int, radius: int = 6
+) -> QPixmap:
+    scaled = src.scaled(
+        width,
+        height,
+        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    x = max(0, (scaled.width() - width) // 2)
+    y = max(0, (scaled.height() - height) // 2)
+    cropped = scaled.copy(x, y, width, height)
+
+    result = QPixmap(width, height)
+    result.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(result)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    path = QPainterPath()
+    path.addRoundedRect(0, 0, width, height, radius, radius)
+    painter.setClipPath(path)
+    painter.drawPixmap(0, 0, cropped)
+    painter.end()
+    return result
+
+
+class _ThumbnailPopup(QFrame):
+    """Hover popup for a backup's save-state screenshot."""
+
+    def __init__(self, image_data: bytes, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.ToolTip | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setObjectName("thumbnailPopup")
+        self.setStyleSheet(
+            f"#thumbnailPopup {{ background:{'#2d2d2d' if isDarkTheme() else '#ffffff'}; "
+            f"border:1px solid {theme.divider()}; "
+            f"border-radius:{theme.RADIUS_MD}px; }}"
+        )
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+
+        pm = QPixmap()
+        pm.loadFromData(image_data)
+        self._scaled = pm.scaled(
+            720,
+            450,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+
+        image = QLabel(self)
+        image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        image.setPixmap(self._scaled)
+        layout.addWidget(image)
+        self.adjustSize()
+
+    def show_near(self, anchor: QWidget) -> None:
+        """Show the popup beside *anchor* while keeping it on screen."""
+        pos = anchor.mapToGlobal(anchor.rect().topRight())
+        x = pos.x() + 12
+        y = pos.y() - 8
+
+        screen = QGuiApplication.screenAt(pos) or QGuiApplication.primaryScreen()
+        if screen is not None:
+            geo = screen.availableGeometry()
+            if x + self.width() > geo.right():
+                x = anchor.mapToGlobal(anchor.rect().topLeft()).x() - self.width() - 12
+            if y + self.height() > geo.bottom():
+                y = geo.bottom() - self.height()
+            x = max(geo.left(), x)
+            y = max(geo.top(), y)
+
+        self.move(x, y)
+        self.show()
+
+
+class _ThumbnailLabel(QLabel):
+    """Thumbnail label that opens a large preview on hover."""
+
+    def __init__(
+        self, preview: QPixmap, image_data: bytes, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._image_data = image_data
+        self._popup: _ThumbnailPopup | None = None
+        self.setFixedSize(72, 42)
+        self.setPixmap(preview)
+        self.setAccessibleName(t("restore.state_preview_open"))
+
+    def enterEvent(self, event) -> None:  # noqa: ANN001
+        self._show_popup()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: ANN001
+        self._hide_popup()
+        super().leaveEvent(event)
+
+    def hideEvent(self, event) -> None:  # noqa: ANN001
+        self._hide_popup()
+        super().hideEvent(event)
+
+    def _show_popup(self) -> None:
+        if self._popup is None:
+            self._popup = _ThumbnailPopup(self._image_data, self.window())
+        self._popup.show_near(self)
+
+    def _hide_popup(self) -> None:
+        if self._popup is not None:
+            self._popup.hide()
 
 
 # -----------------------------------------------------------------------
@@ -305,7 +435,7 @@ class _VersionCard(QWidget):
         self._prev_record = prev_record
         self._is_first = is_first
         self._is_last = is_last
-        self.setFixedHeight(76 if record.note else 56)
+        self.setFixedHeight(84 if record.note else 64)
         self.setObjectName("versionRow")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
@@ -326,6 +456,12 @@ class _VersionCard(QWidget):
             f"border-radius:{theme.RADIUS_SM}px; font-weight:600; font-size:12px;"
         )
         root.addWidget(ver_label)
+
+        preview = _backup_thumbnail_preview(record)
+        if preview is not None:
+            preview_pixmap, image_data = preview
+            preview_label = _ThumbnailLabel(preview_pixmap, image_data, self)
+            root.addWidget(preview_label, 0, Qt.AlignmentFlag.AlignVCenter)
 
         # Info
         info = QVBoxLayout()

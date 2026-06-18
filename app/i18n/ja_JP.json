@@ -111,6 +111,8 @@
         "note_placeholder": "このバックアップ時点の進行状況や注意点を記録",
         "important_checkpoint": "重要なチェックポイントにする（自動削除の対象外）",
         "edit_checkpoint": "チェックポイントを編集",
+        "state_preview": "ステートセーブのスクリーンショット",
+        "state_preview_open": "クリックしてステートセーブのスクリーンショットを拡大",
         "select_title": "復元するセーブを選択",
         "select_desc": "このバックアップから復元する項目を選択してください。",
         "newer_local": "ローカルが新しい"

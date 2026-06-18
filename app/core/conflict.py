@@ -11,6 +11,8 @@ from pathlib import Path
 
 from loguru import logger
 
+from app.core.state_thumbnail import THUMBNAIL_DIR
+
 
 class ConflictResolution(str, Enum):
     """How a conflict should be resolved."""
@@ -60,10 +62,13 @@ def file_sha256(path: Path) -> str:
 
 def _zip_content_hash_from(zf: zipfile.ZipFile) -> str:
     h = hashlib.sha256()
-    for name in sorted(zf.namelist()):
-        h.update(name.encode("utf-8"))
+    entries = sorted(zf.infolist(), key=lambda zi: zi.filename)
+    for entry in entries:
+        if entry.is_dir() or entry.filename.startswith(f"{THUMBNAIL_DIR}/"):
+            continue
+        h.update(entry.filename.encode("utf-8"))
         h.update(b"\x00")
-        h.update(zf.read(name))
+        h.update(zf.read(entry))
     return h.hexdigest()
 
 

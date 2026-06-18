@@ -9,6 +9,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from app.core.state_thumbnail import THUMBNAIL_DIR
 from app.models.backup_record import BackupRecord
 
 ADDED = "added"
@@ -71,6 +72,8 @@ def _entry_map(zip_path: Path) -> dict[str, tuple[str, int]]:
         with zipfile.ZipFile(zip_path, "r") as zf:
             for zi in zf.infolist():
                 if zi.is_dir():
+                    continue
+                if zi.filename.startswith(f"{THUMBNAIL_DIR}/"):
                     continue
                 data = zf.read(zi.filename)
                 out[zi.filename] = (hashlib.sha256(data).hexdigest(), len(data))

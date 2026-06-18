@@ -111,6 +111,8 @@
         "note_placeholder": "记录这个备份节点的状态、进度或注意事项",
         "important_checkpoint": "标记为重要节点（防止自动轮转删除）",
         "edit_checkpoint": "编辑检查点",
+        "state_preview": "即时存档截图",
+        "state_preview_open": "点击放大即时存档截图",
         "select_title": "选择要还原的存档",
         "select_desc": "勾选要从该备份还原的存档项",
         "newer_local": "本地更新"

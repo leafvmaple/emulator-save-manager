@@ -12,6 +12,7 @@ from loguru import logger
 
 from app.config import _default_data_dir
 from app.core.path_resolver import platform_data_dir_candidates
+from app.core.state_thumbnail import extract_state_thumbnail
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveFile, SaveType
 from app.plugins.base import EmulatorPlugin
@@ -241,6 +242,17 @@ class CitraPlugin(EmulatorPlugin):
             "extdata": sdmc / "Nintendo 3DS" if sdmc.exists() else dp / "sdmc" / "Nintendo 3DS",
             "states": dp / "states",
         }
+
+    def get_state_thumbnail(self, save_path: Path) -> bytes | None:
+        """Return a Citra save-state thumbnail if a sibling image exists.
+
+        Citra/Azahar ``.cst`` files do not store a ready-made screenshot in
+        their header. Some frontends/forks may write an adjacent image, so use
+        the shared sibling-image extractor for those cases.
+        """
+        if save_path.suffix.lower() != ".cst":
+            return None
+        return extract_state_thumbnail(save_path)
 
     # ------------------------------------------------------------------
     # Internal scanning helpers

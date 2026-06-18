@@ -26,6 +26,7 @@ from app.models.backup_record import BackupInfo, BackupRecord
 from app.models.game_save import GameSave
 from app.core.conflict import zip_content_hash
 from app.core.path_resolver import to_portable_path
+from app.core.state_thumbnail import add_backup_thumbnail
 
 
 def source_content_hash(saves: list[GameSave]) -> str:
@@ -164,12 +165,27 @@ class BackupManager:
                         elif sf.path.is_file():
                             arc_name = f"{type_prefix}/{sf.path.name}"
                             zf.write(sf.path, arc_name)
-                            backup_paths.append({
+                            modified_time = sf.modified
+                            try:
+                                modified_time = datetime.fromtimestamp(
+                                    sf.path.stat().st_mtime
+                                )
+                            except OSError:
+                                pass
+                            entry = {
                                 "source": to_portable_path(sf.path, emu_data_path),
                                 "type": type_prefix,
                                 "zip_path": arc_name,
                                 "is_dir": False,
-                            })
+                                "modified_time": modified_time.isoformat(),
+                            }
+                            if type_prefix == "savestate":
+                                thumb_path = add_backup_thumbnail(
+                                    zf, sf.path, len(backup_paths)
+                                )
+                                if thumb_path:
+                                    entry["thumbnail_zip_path"] = thumb_path
+                            backup_paths.append(entry)
                     except Exception as e:
                         logger.error("Failed to add {} to zip: {}", sf.path, e)
                         raise
