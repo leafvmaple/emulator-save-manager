@@ -84,6 +84,22 @@ _STATUS: dict[str, tuple[str, str]] = {
 _STATUS_FALLBACK = ("#888888", "#9a9a9a")
 
 
+def apply_card_list_layout(layout) -> None:
+    """Configure a vertical card-list layout for an even visible rhythm.
+
+    Cards carry 12px internal top+bottom padding, so the whitespace *between*
+    cards is ``spacing + 2*pad`` while the whitespace from a bare label (e.g. a
+    section/count row) to the first card is only ``page_spacing + 1*pad``.  We
+    give the list a top margin equal to its spacing so the first card's visible
+    gap matches the inter-card gap.  One place, used by every card page.
+
+    Spacing GAP_XS → ~28px of visible whitespace between cards (GAP_XS + the two
+    12px card paddings).
+    """
+    layout.setContentsMargins(GAP_XS, GAP_XS, GAP_XS, GAP_XS)
+    layout.setSpacing(GAP_XS)
+
+
 def status_fill(key: str) -> str:
     """Solid pill-background colour for *key* (white text sits on top)."""
     return _STATUS.get(key, _STATUS_FALLBACK)[0]
