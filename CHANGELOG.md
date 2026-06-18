@@ -1,3 +1,21 @@
+# v0.9.0
+
+Released on 2026-06-18
+
+## ✨ Features
+
+- feat(scan/restore): persist scan results, auto-load backups on open (`4806900`)
+- feat(ui): add Home dashboard, empty states, and card interactions (`b49abd4`)
+
+## 📦 Other Changes
+
+- refactor(ui): narrow nav rail + selected-card highlight (`45b5ede`)
+- refactor(ui): tighten and flatten the save cards (`f5fc487`)
+- refactor(ui): extract shared TypeBadge + PageHeader components (`0302b92`)
+- refactor(ui): theme-aware design tokens + consistent action bars (`cf5d667`)
+
+---
+
 # v0.8.3
 
 Released on 2026-06-18
