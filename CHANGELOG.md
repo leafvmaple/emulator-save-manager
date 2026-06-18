@@ -1,3 +1,19 @@
+# v1.0.0
+
+Released on 2026-06-18
+
+## 🐛 Bug Fixes
+
+- fix(ui): re-style custom widgets on live theme switch (`6ec32c3`)
+
+## 📦 Other Changes
+
+- docs: add ROADMAP.md tracking post-1.0 work (P2) (`22344ab`)
+- test: cover scanner + game_icon; harden WebDAV upload timeout (`a95a59e`)
+- chore(ci): add ruff lint gate + Linux test job; clean unused imports (`59384c1`)
+
+---
+
 # v0.9.2
 
 Released on 2026-06-18
