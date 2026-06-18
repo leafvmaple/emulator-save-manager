@@ -38,6 +38,7 @@ from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
 from app.ui.components.empty_state import EmptyState
 from app.ui.components.avatar import letter_avatar
+from app.ui.components.elided_label import ElidedCaptionLabel, ElidedStrongBodyLabel
 from app.ui.components.skeleton import SkeletonCard
 
 
@@ -195,9 +196,9 @@ class _GameSaveCard(CardWidget):
         # Row 1: title + emulator badge
         row1 = QHBoxLayout()
         row1.setSpacing(8)
-        title = StrongBodyLabel(display_name, self)
+        title = ElidedStrongBodyLabel(display_name, self)
         setFont(title, 14, QFont.Weight.DemiBold)
-        row1.addWidget(title)
+        row1.addWidget(title, 1)
 
         emu_label = CaptionLabel(ref.emulator, self)
         emu_label.setStyleSheet(
@@ -225,12 +226,12 @@ class _GameSaveCard(CardWidget):
         row3.setSpacing(theme.GAP_MD)
         muted = f"color:{theme.text_muted()};"
 
-        def _meta(text: str) -> CaptionLabel:
-            lbl = CaptionLabel(text, self)
+        def _meta(text: str, elide: bool = False) -> CaptionLabel:
+            lbl = ElidedCaptionLabel(text, self) if elide else CaptionLabel(text, self)
             lbl.setStyleSheet(muted)
             return lbl
 
-        row3.addWidget(_meta(f"ID: {game_id}"))
+        row3.addWidget(_meta(f"ID: {game_id}", elide=True), 1)
 
         crc = ref.crc32
         for s in saves:
@@ -296,71 +297,94 @@ class _GameSaveCard(CardWidget):
             for sf in s.save_files:
                 all_files.append(sf)
 
+        type_col_w = 92
+        size_col_w = 84
+        modified_col_w = 132
+        action_col_w = 24
+        col_gap = theme.GAP_MD
+
         # Header row
-        hdr = QHBoxLayout()
-        hdr.setSpacing(0)
+        header_widget = QWidget(self)
+        hrow = QHBoxLayout(header_widget)
+        hrow.setContentsMargins(4, 2, 4, 2)
+        hrow.setSpacing(col_gap)
         _hdr_css = f"color:{theme.text_muted()}; font-weight:600;"
-        hdr_name = CaptionLabel(t("scan.file_name"), self)
+        hdr_name = ElidedCaptionLabel(t("scan.file_name"), header_widget)
+        hdr_name.setObjectName("detailHeaderFileName")
+        hdr_name.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         hdr_name.setStyleSheet(_hdr_css)
-        hdr_name.setFixedWidth(260)
-        hdr.addWidget(hdr_name)
-        hdr_type = CaptionLabel(t("scan.save_type"), self)
+        hrow.addWidget(hdr_name, 1)
+        hdr_type = CaptionLabel(t("scan.save_type"), header_widget)
+        hdr_type.setObjectName("detailHeaderSaveType")
+        hdr_type.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         hdr_type.setStyleSheet(_hdr_css)
-        hdr_type.setFixedWidth(90)
-        hdr.addWidget(hdr_type)
-        hdr_size = CaptionLabel(t("scan.size"), self)
+        hdr_type.setFixedWidth(type_col_w)
+        hrow.addWidget(hdr_type)
+        hdr_size = CaptionLabel(t("scan.size"), header_widget)
+        hdr_size.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         hdr_size.setStyleSheet(_hdr_css)
-        hdr_size.setFixedWidth(80)
-        hdr.addWidget(hdr_size)
-        hdr_mod = CaptionLabel(t("scan.last_modified"), self)
+        hdr_size.setFixedWidth(size_col_w)
+        hrow.addWidget(hdr_size)
+        hdr_mod = CaptionLabel(t("scan.last_modified"), header_widget)
+        hdr_mod.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         hdr_mod.setStyleSheet(_hdr_css)
-        hdr.addWidget(hdr_mod)
-        hdr.addStretch()
-        detail_layout.addLayout(hdr)
+        hdr_mod.setFixedWidth(modified_col_w)
+        hrow.addWidget(hdr_mod)
+        hdr_action = QWidget(header_widget)
+        hdr_action.setFixedWidth(action_col_w)
+        hrow.addWidget(hdr_action)
+        detail_layout.addWidget(header_widget)
 
         # File rows — each is a hoverable widget for scanability
         muted = f"color:{theme.text_muted()};"
         for sf in all_files:
             row_widget = QWidget(self)
+            row_widget.setObjectName("saveFileRow")
             row_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
             row_widget.setStyleSheet(
-                f"QWidget:hover {{ background:{theme.subtle_fill()}; "
+                f"#saveFileRow:hover {{ background:{theme.subtle_fill()}; "
                 f"border-radius:{theme.RADIUS_SM}px; }}"
             )
             frow = QHBoxLayout(row_widget)
             frow.setContentsMargins(4, 2, 4, 2)
-            frow.setSpacing(0)
+            frow.setSpacing(col_gap)
 
             # File / folder name (with path tooltip)
-            file_label = CaptionLabel(sf.path.name, self)
-            file_label.setFixedWidth(256)
+            file_label = ElidedCaptionLabel(sf.path.name, row_widget)
+            file_label.setObjectName("detailFileName")
+            file_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            file_label.setMinimumWidth(0)
             file_label.setToolTip(str(sf.path))
             file_label.setStyleSheet(f"color:{theme.text_primary()}; font-weight:600;")
-            frow.addWidget(file_label)
+            frow.addWidget(file_label, 1)
 
             # Type
-            type_label = CaptionLabel(t(f"save_type.{sf.save_type.value}"), self)
-            type_label.setFixedWidth(90)
+            type_label = CaptionLabel(t(f"save_type.{sf.save_type.value}"), row_widget)
+            type_label.setObjectName("detailSaveType")
+            type_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            type_label.setFixedWidth(type_col_w)
             type_label.setStyleSheet(f"color:{theme.status_text(sf.save_type.value)};")
             frow.addWidget(type_label)
 
             # Size
-            size_label = CaptionLabel(_format_size(sf.size), self)
-            size_label.setFixedWidth(80)
+            size_label = CaptionLabel(_format_size(sf.size), row_widget)
+            size_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            size_label.setFixedWidth(size_col_w)
             size_label.setStyleSheet(muted)
             frow.addWidget(size_label)
 
             # Modified time
             mod_label = CaptionLabel(
                 sf.modified.strftime("%Y/%m/%d %H:%M") if sf.modified else "-",
-                self,
+                row_widget,
             )
+            mod_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            mod_label.setFixedWidth(modified_col_w)
             mod_label.setStyleSheet(muted)
             frow.addWidget(mod_label)
-            frow.addStretch()
 
             # Open folder button for this file
-            file_folder_btn = TransparentToolButton(FIF.FOLDER, self)
+            file_folder_btn = TransparentToolButton(FIF.FOLDER, row_widget)
             file_folder_btn.setFixedSize(24, 24)
             file_folder_btn.setToolTip(t("common.open_folder"))
             _path = sf.path

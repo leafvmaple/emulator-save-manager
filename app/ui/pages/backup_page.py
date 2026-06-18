@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 )
 from qfluentwidgets import (
-    CaptionLabel, StrongBodyLabel,
+    CaptionLabel,
     PrimaryPushButton, PushButton, CardWidget, SmoothScrollArea, FluentIcon as FIF,
     InfoBar, InfoBarPosition, InfoBadge,
     CheckBox, ProgressRing, setFont,
@@ -30,6 +30,7 @@ from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
 from app.ui.components.empty_state import EmptyState
 from app.ui.components.avatar import letter_avatar
+from app.ui.components.elided_label import ElidedCaptionLabel, ElidedStrongBodyLabel
 
 
 # -----------------------------------------------------------------------
@@ -168,9 +169,9 @@ class _GameCard(CardWidget):
         # Title row
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
-        title_label = StrongBodyLabel(display_name, self)
+        title_label = ElidedStrongBodyLabel(display_name, self)
         setFont(title_label, 14, QFont.Weight.DemiBold)
-        title_row.addWidget(title_label)
+        title_row.addWidget(title_label, 1)
 
         emu_badge = CaptionLabel(ref.emulator, self)
         emu_badge.setStyleSheet(
@@ -198,8 +199,8 @@ class _GameCard(CardWidget):
         meta_row.setSpacing(theme.GAP_MD)
         muted = f"color:{theme.text_muted()};"
 
-        def _meta(text: str) -> CaptionLabel:
-            lbl = CaptionLabel(text, self)
+        def _meta(text: str, elide: bool = False) -> CaptionLabel:
+            lbl = ElidedCaptionLabel(text, self) if elide else CaptionLabel(text, self)
             lbl.setStyleSheet(muted)
             return lbl
 
@@ -210,7 +211,7 @@ class _GameCard(CardWidget):
             default=None,
         )
 
-        meta_row.addWidget(_meta(f"ID: {ref.game_id}"))
+        meta_row.addWidget(_meta(f"ID: {ref.game_id}", elide=True), 1)
         meta_row.addWidget(_meta(f"{t('scan.size')}: {_format_size(total_size)}"))
         meta_row.addWidget(_meta(
             f"{file_count} {t('backup.file_group', type='', count=str(file_count)).strip()}"

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
 )
 from qfluentwidgets import (
-    SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
+    SubtitleLabel, BodyLabel, CaptionLabel,
     PushButton, TransparentToolButton,
     CardWidget, SmoothScrollArea, CheckBox,
     FluentIcon as FIF, InfoBar, InfoBarPosition, InfoBadge,
@@ -36,6 +36,7 @@ from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
 from app.ui.components.empty_state import EmptyState
 from app.ui.components.avatar import letter_avatar
+from app.ui.components.elided_label import ElidedCaptionLabel, ElidedStrongBodyLabel
 
 
 class _RestoreWorker(QThread):
@@ -480,9 +481,9 @@ class _VersionCard(QWidget):
             top_row.addWidget(pin)
 
         if record.label:
-            lbl = CaptionLabel(record.label, self)
+            lbl = ElidedCaptionLabel(record.label, self)
             lbl.setStyleSheet(f"color:{theme.text_secondary()}; font-style:italic;")
-            top_row.addWidget(lbl)
+            top_row.addWidget(lbl, 1)
 
         top_row.addStretch()
         info.addLayout(top_row)
@@ -492,7 +493,7 @@ class _VersionCard(QWidget):
         bottom_row = QHBoxLayout()
         bottom_row.setSpacing(theme.GAP_MD)
         if record.note:
-            note_label = CaptionLabel(record.note.replace("\n", "  "), self)
+            note_label = ElidedCaptionLabel(record.note.replace("\n", "  "), self)
             note_label.setToolTip(record.note)
             note_label.setStyleSheet(f"color:{theme.text_muted()};")
             bottom_row.addWidget(note_label, 1)
@@ -628,9 +629,9 @@ class _GameBackupCard(CardWidget):
 
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
-        title_label = StrongBodyLabel(game_name, header)
+        title_label = ElidedStrongBodyLabel(game_name, header)
         setFont(title_label, 14, QFont.Weight.DemiBold)
-        title_row.addWidget(title_label)
+        title_row.addWidget(title_label, 1)
 
         emu_badge = CaptionLabel(emulator, header)
         emu_badge.setStyleSheet(
@@ -645,12 +646,12 @@ class _GameBackupCard(CardWidget):
         meta_row.setSpacing(theme.GAP_MD)
         muted = f"color:{theme.text_muted()};"
 
-        def _meta(text: str) -> CaptionLabel:
-            lbl = CaptionLabel(text, header)
+        def _meta(text: str, elide: bool = False) -> CaptionLabel:
+            lbl = ElidedCaptionLabel(text, header) if elide else CaptionLabel(text, header)
             lbl.setStyleSheet(muted)
             return lbl
 
-        meta_row.addWidget(_meta(f"ID: {game_id}"))
+        meta_row.addWidget(_meta(f"ID: {game_id}", elide=True), 1)
         meta_row.addWidget(_meta(f"{len(records)} {t('backup.backup_count').lower()}"))
 
         # Type badges from latest backup
