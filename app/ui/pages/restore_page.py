@@ -36,6 +36,7 @@ from app.ui import theme
 from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
 from app.ui.components.empty_state import EmptyState
+from app.ui.components.avatar import letter_avatar
 
 
 class _RestoreWorker(QThread):
@@ -406,16 +407,7 @@ class _GameBackupCard(CardWidget):
         if pm and not pm.isNull():
             self._icon_label.setPixmap(pm)
         else:
-            emu_pm = get_plugin_icon(emulator, self.ICON_WIDTH)
-            if emu_pm and not emu_pm.isNull():
-                self._icon_label.setPixmap(emu_pm)
-            else:
-                fallback = IconWidget(FIF.GAME, header)
-                fallback.setFixedSize(36, 36)
-                fl = QVBoxLayout(self._icon_label)
-                fl.setContentsMargins(0, 0, 0, 0)
-                fl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                fl.addWidget(fallback)
+            self._icon_label.setPixmap(letter_avatar(game_name, self.ICON_WIDTH))
         header_layout.addWidget(self._icon_label)
 
         # Title + meta

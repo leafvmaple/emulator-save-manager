@@ -38,6 +38,7 @@ from app.ui import theme
 from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
 from app.ui.components.empty_state import EmptyState
+from app.ui.components.avatar import letter_avatar
 
 
 # -----------------------------------------------------------------------
@@ -182,7 +183,7 @@ class _GameSaveCard(CardWidget):
         if pm and not pm.isNull():
             self._icon_label.setPixmap(pm)
         else:
-            self._set_fallback_icon(ref.emulator)
+            self._set_fallback_icon(display_name)
         root.addWidget(self._icon_label, 0, Qt.AlignmentFlag.AlignVCenter)
         self._icon_provider = icon_provider
 
@@ -382,19 +383,9 @@ class _GameSaveCard(CardWidget):
             self._expand_btn.setIcon(FIF.CHEVRON_RIGHT)
             self._expand_btn.setToolTip(t("scan.show_files"))
 
-    def _set_fallback_icon(self, emulator_name: str) -> None:
-        """Try plugin icon.png, otherwise show generic icon."""
-        pm = get_plugin_icon(emulator_name, self.ICON_WIDTH)
-        if pm and not pm.isNull():
-            self._icon_label.setPixmap(pm)
-        else:
-            inner = QVBoxLayout()
-            inner.setContentsMargins(0, 0, 0, 0)
-            inner.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            fw = IconWidget(FIF.GAME, self._icon_label)
-            fw.setFixedSize(32, 32)
-            inner.addWidget(fw)
-            self._icon_label.setLayout(inner)
+    def _set_fallback_icon(self, label_text: str) -> None:
+        """Show a deterministic letter-avatar when there's no cover art."""
+        self._icon_label.setPixmap(letter_avatar(label_text, self.ICON_WIDTH))
 
     def _open_folder(self) -> None:
         if not self.saves or not self.saves[0].save_files:
