@@ -32,6 +32,7 @@ from app.i18n import t
 from app.models.backup_record import BackupRecord
 from app.models.game_save import SaveType
 from app.core.game_icon import GameIconProvider, get_plugin_icon
+from app.ui import theme
 
 
 class _RestoreWorker(QThread):
@@ -92,15 +93,6 @@ def _backup_types(record: BackupRecord) -> list[str]:
         return []
 
 
-_SAVE_TYPE_COLORS: dict[str, str] = {
-    "savestate": "#0078d4",
-    "memcard": "#107c10",
-    "folder": "#107c10",
-    "battery": "#ff8c00",
-    "file": "#5c2d91",
-}
-
-
 class _TypeBadge(QLabel):
     """Coloured pill badge for a save type."""
 
@@ -112,8 +104,8 @@ class _TypeBadge(QLabel):
         pad = max(24, self.fontMetrics().horizontalAdvance(text) + 14)
         self.setFixedWidth(pad)
         self.setStyleSheet(
-            f"background:{color}; color:white; border-radius:9px; "
-            f"padding:0 5px; font-weight:500;"
+            f"background:{color}; color:{theme.on_accent()}; "
+            f"border-radius:{theme.RADIUS_PILL}px; padding:0 5px; font-weight:500;"
         )
 
 
@@ -191,12 +183,6 @@ class _RestoreSelectDialog(MessageBoxBase):
 class _DiffDialog(MessageBoxBase):
     """Read-only view of what changed between two backups."""
 
-    _STATUS_COLOR = {
-        "added": "#107c10",
-        "removed": "#c42b1c",
-        "modified": "#ff8c00",
-    }
-
     def __init__(self, diff, parent: QWidget | None = None) -> None:  # noqa: ANN001
         super().__init__(parent)
         self.titleLabel = SubtitleLabel(t("compare.title"), self)
@@ -207,7 +193,7 @@ class _DiffDialog(MessageBoxBase):
             f"v{diff.new.version} {diff.new.display_time}",
             self,
         )
-        sub.setStyleSheet("color:#888;")
+        sub.setStyleSheet(f"color:{theme.text_muted()};")
         self.viewLayout.addWidget(sub)
 
         if not diff.has_changes:
@@ -239,14 +225,15 @@ class _DiffDialog(MessageBoxBase):
             badge.setFixedHeight(18)
             setFont(badge, 10)
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            color = self._STATUS_COLOR.get(f.status, "#888")
+            color = theme.status_fill(f.status)
             badge.setStyleSheet(
-                f"background:{color}; color:white; border-radius:9px; padding:0 8px;"
+                f"background:{color}; color:{theme.on_accent()}; "
+                f"border-radius:{theme.RADIUS_PILL}px; padding:0 8px;"
             )
             row.addWidget(badge)
 
             name = CaptionLabel(f.name)
-            name.setStyleSheet("color:#000000;")
+            name.setStyleSheet(f"color:{theme.text_primary()};")
             row.addWidget(name)
             row.addStretch()
             row.addWidget(CaptionLabel(self._size_text(f)))
@@ -307,7 +294,8 @@ class _VersionCard(SimpleCardWidget):
         ver_label.setFixedSize(36, 24)
         ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ver_label.setStyleSheet(
-            "background:#0078d4; color:white; border-radius:4px; font-weight:600; font-size:12px;"
+            f"background:{theme.accent()}; color:{theme.on_accent()}; "
+            f"border-radius:{theme.RADIUS_SM}px; font-weight:600; font-size:12px;"
         )
         root.addWidget(ver_label)
 
@@ -324,12 +312,12 @@ class _VersionCard(SimpleCardWidget):
 
         if record.is_pinned:
             pin = CaptionLabel(f"[{t('backup.pin')}]", self)
-            pin.setStyleSheet("color:#d83b01; font-weight:600;")
+            pin.setStyleSheet(f"color:{theme.status_text('pinned')}; font-weight:600;")
             top_row.addWidget(pin)
 
         if record.label:
             lbl = CaptionLabel(record.label, self)
-            lbl.setStyleSheet("color:#666; font-style:italic;")
+            lbl.setStyleSheet(f"color:{theme.text_secondary()}; font-style:italic;")
             top_row.addWidget(lbl)
 
         top_row.addStretch()
@@ -457,7 +445,8 @@ class _GameBackupCard(CardWidget):
 
         emu_badge = CaptionLabel(emulator, header)
         emu_badge.setStyleSheet(
-            "background:#e0e0e0; color:#444; border-radius:3px; padding:1px 6px;"
+            f"background:{theme.subtle_fill()}; color:{theme.subtle_fill_text()}; "
+            f"border-radius:{theme.RADIUS_SM}px; padding:1px 6px;"
         )
         title_row.addWidget(emu_badge)
         title_row.addStretch()
@@ -473,7 +462,7 @@ class _GameBackupCard(CardWidget):
         # Type badges from latest backup
         types = _backup_types(records[0]) if records else []
         for tp_key in types:
-            color = _SAVE_TYPE_COLORS.get(tp_key, "#888")
+            color = theme.status_fill(tp_key)
             meta_row.addWidget(_TypeBadge(t(f"save_type.{tp_key}"), color, header))
 
         meta_row.addStretch()
@@ -575,8 +564,9 @@ class RestorePage(QWidget):
 
     def _init_ui(self) -> None:
         page_layout = QVBoxLayout(self)
-        page_layout.setContentsMargins(36, 20, 36, 20)
-        page_layout.setSpacing(12)
+        page_layout.setContentsMargins(theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V,
+                                       theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V)
+        page_layout.setSpacing(theme.GAP_MD)
 
         title = SubtitleLabel(t("restore.title"), self)
         desc = BodyLabel(t("restore.description"), self)
@@ -585,26 +575,28 @@ class RestorePage(QWidget):
         page_layout.addWidget(desc)
 
         # Action bar
+        av = Qt.AlignmentFlag.AlignVCenter
         action_bar = QHBoxLayout()
-        action_bar.setSpacing(12)
+        action_bar.setSpacing(theme.GAP_MD)
 
         refresh_btn = PushButton(FIF.SYNC, t("common.refresh"), self)
         refresh_btn.clicked.connect(self._refresh_backups)
-        action_bar.addWidget(refresh_btn)
+        action_bar.addWidget(refresh_btn, 0, av)
 
         self._count_badge = InfoBadge.attension("0", parent=self)
         self._count_badge.setFixedHeight(20)
-        action_bar.addWidget(self._count_badge)
+        action_bar.addWidget(self._count_badge, 0, av)
 
         action_bar.addStretch()
 
         self._progress = ProgressRing(self)
-        self._progress.setFixedSize(24, 24)
+        self._progress.setFixedSize(20, 20)
         self._progress.hide()
-        action_bar.addWidget(self._progress)
+        action_bar.addWidget(self._progress, 0, av)
 
         self._status_label = CaptionLabel("", self)
-        action_bar.addWidget(self._status_label)
+        self._status_label.setStyleSheet(f"color:{theme.text_muted()};")
+        action_bar.addWidget(self._status_label, 0, av)
 
         page_layout.addLayout(action_bar)
 
@@ -623,7 +615,7 @@ class RestorePage(QWidget):
         # Empty state
         self._empty_label = BodyLabel(t("backup.no_backups"), self)
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_label.setStyleSheet("color: #888;")
+        self._empty_label.setStyleSheet(f"color:{theme.text_muted()};")
         page_layout.addWidget(self._empty_label)
         self._empty_label.hide()
 

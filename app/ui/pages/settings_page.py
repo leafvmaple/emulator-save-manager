@@ -31,6 +31,7 @@ from loguru import logger
 from app.i18n import t, set_language
 from app.config import Config
 from app.core.game_icon import get_plugin_icon
+from app.ui import theme
 
 
 # -----------------------------------------------------------------------
@@ -100,11 +101,11 @@ class _AboutCard(CardWidget):
 
         from app.version import get_app_version
         ver = CaptionLabel(f"v{get_app_version()}", self)
-        ver.setStyleSheet("color:#888;")
+        ver.setStyleSheet(f"color:{theme.text_muted()};")
         col.addWidget(ver)
 
         desc = CaptionLabel(t("settings.about_desc"), self)
-        desc.setStyleSheet("color:#666;")
+        desc.setStyleSheet(f"color:{theme.text_secondary()};")
         col.addWidget(desc)
 
         root.addLayout(col, 1)
@@ -144,7 +145,7 @@ class _WebDavCard(CardWidget):
         root.addWidget(title)
 
         hint = CaptionLabel(t("settings.webdav_hint"), self)
-        hint.setStyleSheet("color:#888;")
+        hint.setStyleSheet(f"color:{theme.text_muted()};")
         hint.setWordWrap(True)
         root.addWidget(hint)
 
@@ -231,7 +232,7 @@ class _WebDavCard(CardWidget):
         )
         self._test_btn.setEnabled(False)
         self._status.setText(t("settings.webdav_testing"))
-        self._status.setStyleSheet("color:#888;")
+        self._status.setStyleSheet(f"color:{theme.text_muted()};")
         self._worker = _WebDavTestWorker(backend, self)
         self._worker.done.connect(self._on_test_done)
         self._worker.start()
@@ -240,10 +241,10 @@ class _WebDavCard(CardWidget):
         self._test_btn.setEnabled(True)
         if ok:
             self._status.setText("✓ " + t("settings.webdav_ok"))
-            self._status.setStyleSheet("color:#107c10;")
+            self._status.setStyleSheet(f"color:{theme.success()};")
         else:
             self._status.setText("✗ " + (msg or "failed"))
-            self._status.setStyleSheet("color:#c42b1c;")
+            self._status.setStyleSheet(f"color:{theme.error()};")
 
 
 class _EmulatorPathCard(CardWidget):
@@ -296,7 +297,7 @@ class _EmulatorPathCard(CardWidget):
         desc_label = CaptionLabel(
             t("settings.emulator_install_path_desc"), self,
         )
-        desc_label.setStyleSheet("color:#888;")
+        desc_label.setStyleSheet(f"color:{theme.text_muted()};")
         title_col.addWidget(desc_label)
         header.addLayout(title_col, 1)
 
@@ -350,7 +351,7 @@ class _EmulatorPathCard(CardWidget):
         row.addWidget(icon, 0, Qt.AlignmentFlag.AlignVCenter)
 
         label = CaptionLabel(path, self)
-        label.setStyleSheet("color:#555;")
+        label.setStyleSheet(f"color:{theme.text_secondary()};")
         row.addWidget(label, 1)
 
         remove_btn = TransparentToolButton(FIF.CLOSE, self)
@@ -449,8 +450,9 @@ class SettingsPage(QWidget):
 
         container = QWidget()
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(36, 20, 36, 20)
-        layout.setSpacing(20)
+        layout.setContentsMargins(theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V,
+                                  theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V)
+        layout.setSpacing(theme.GAP_XL)
 
         # Title
         title = SubtitleLabel(t("settings.title"), container)

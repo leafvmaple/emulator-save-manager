@@ -28,6 +28,7 @@ from loguru import logger
 from app.i18n import t
 from app.models.game_save import GameSave, SaveType
 from app.core.game_icon import GameIconProvider, get_plugin_icon
+from app.ui import theme
 
 
 # -----------------------------------------------------------------------
@@ -104,15 +105,6 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
 
 
-_SAVE_TYPE_COLORS: dict[SaveType, str] = {
-    SaveType.SAVESTATE: "#0078d4",
-    SaveType.MEMCARD: "#107c10",
-    SaveType.FOLDER: "#107c10",
-    SaveType.BATTERY: "#ff8c00",
-    SaveType.FILE: "#5c2d91",
-}
-
-
 def _game_group_key(save: GameSave) -> str:
     return f"{save.emulator}:{save.game_id}"
 
@@ -132,7 +124,7 @@ class _TypeBadge(QLabel):
         pad = max(24, self.fontMetrics().horizontalAdvance(text) + 16)
         self.setFixedWidth(pad)
         self.setStyleSheet(
-            f"background:{color}; color:white; border-radius:10px; "
+            f"background:{color}; color:{theme.on_accent()}; border-radius:10px; "
             f"padding: 0 6px; font-weight:500;"
         )
 
@@ -209,7 +201,8 @@ class _GameCard(CardWidget):
 
         emu_badge = CaptionLabel(ref.emulator, self)
         emu_badge.setStyleSheet(
-            "background:#e0e0e0; color:#444; border-radius:3px; padding:1px 6px;"
+            f"background:{theme.subtle_fill()}; color:{theme.subtle_fill_text()}; "
+            f"border-radius:{theme.RADIUS_SM}px; padding:1px 6px;"
         )
         title_row.addWidget(emu_badge)
         title_row.addStretch()
@@ -223,7 +216,7 @@ class _GameCard(CardWidget):
             key=lambda x: x.value,
         )
         for st in all_types:
-            color = _SAVE_TYPE_COLORS.get(st, "#888")
+            color = theme.status_fill(st.value)
             badge_row.addWidget(_TypeBadge(t(f"save_type.{st.value}"), color, self))
         badge_row.addStretch()
         info_col.addLayout(badge_row)
@@ -326,8 +319,9 @@ class BackupPage(QWidget):
 
     def _init_ui(self) -> None:
         page_layout = QVBoxLayout(self)
-        page_layout.setContentsMargins(36, 20, 36, 20)
-        page_layout.setSpacing(12)
+        page_layout.setContentsMargins(theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V,
+                                       theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V)
+        page_layout.setSpacing(theme.GAP_MD)
 
         title = SubtitleLabel(t("backup.title"), self)
         desc = BodyLabel(t("backup.description"), self)
@@ -336,37 +330,38 @@ class BackupPage(QWidget):
         page_layout.addWidget(desc)
 
         # Action bar
+        av = Qt.AlignmentFlag.AlignVCenter
         action_bar = QHBoxLayout()
-        action_bar.setSpacing(12)
+        action_bar.setSpacing(theme.GAP_MD)
 
         self._select_all_cb = CheckBox(t("common.select_all"), self)
         self._select_all_cb.stateChanged.connect(self._on_select_all)
-        action_bar.addWidget(self._select_all_cb)
+        action_bar.addWidget(self._select_all_cb, 0, av)
 
         self._count_badge = InfoBadge.attension("0", parent=self)
         self._count_badge.setFixedHeight(20)
-        action_bar.addWidget(self._count_badge)
+        action_bar.addWidget(self._count_badge, 0, av)
 
         action_bar.addStretch()
 
         self._progress = ProgressRing(self)
-        self._progress.setFixedSize(24, 24)
+        self._progress.setFixedSize(20, 20)
         self._progress.hide()
-        action_bar.addWidget(self._progress)
+        action_bar.addWidget(self._progress, 0, av)
 
         self._status_label = CaptionLabel("", self)
-        action_bar.addWidget(self._status_label)
+        self._status_label.setStyleSheet(f"color:{theme.text_muted()};")
+        action_bar.addWidget(self._status_label, 0, av)
+        action_bar.addSpacing(theme.GAP_SM)
 
         self._backup_btn = PrimaryPushButton(FIF.SAVE, t("backup.backup_selected"), self)
-        self._backup_btn.setFixedWidth(160)
         self._backup_btn.clicked.connect(self._on_backup)
-        action_bar.addWidget(self._backup_btn)
+        action_bar.addWidget(self._backup_btn, 0, av)
 
         self._cancel_btn = PushButton(FIF.CLOSE, t("common.cancel"), self)
-        self._cancel_btn.setFixedWidth(100)
         self._cancel_btn.clicked.connect(self._on_cancel)
         self._cancel_btn.hide()
-        action_bar.addWidget(self._cancel_btn)
+        action_bar.addWidget(self._cancel_btn, 0, av)
 
         page_layout.addLayout(action_bar)
 
@@ -385,7 +380,7 @@ class BackupPage(QWidget):
         # Empty state
         self._empty_label = BodyLabel(t("common.no_data"), self)
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_label.setStyleSheet("color: #888;")
+        self._empty_label.setStyleSheet(f"color:{theme.text_muted()};")
         page_layout.addWidget(self._empty_label)
         self._empty_label.hide()
 

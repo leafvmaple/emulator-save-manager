@@ -16,6 +16,7 @@ from loguru import logger
 from app.i18n import t
 from app.core.sync import SyncResult
 from app.core.conflict import ConflictInfo, ConflictResolution
+from app.ui import theme
 from app.ui.components.conflict_dialog import ConflictDialog, BatchConflictDialog
 
 
@@ -102,8 +103,9 @@ class SyncPage(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(36, 20, 36, 20)
-        layout.setSpacing(16)
+        layout.setContentsMargins(theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V,
+                                  theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V)
+        layout.setSpacing(theme.GAP_LG)
 
         title = SubtitleLabel(t("sync.title"), self)
         desc = BodyLabel(t("sync.description"), self)
@@ -127,36 +129,36 @@ class SyncPage(QWidget):
         layout.addWidget(self._status_card)
 
         # Action buttons
+        av = Qt.AlignmentFlag.AlignVCenter
         action_bar = QHBoxLayout()
+        action_bar.setSpacing(theme.GAP_SM)
 
         self._sync_btn = PrimaryPushButton(FIF.SYNC, t("sync.sync_all"), self)
-        self._sync_btn.setFixedWidth(160)
         self._sync_btn.clicked.connect(self._on_sync)
-        action_bar.addWidget(self._sync_btn)
+        action_bar.addWidget(self._sync_btn, 0, av)
 
         self._push_btn = PushButton(FIF.UP, t("sync.push"), self)
-        self._push_btn.setFixedWidth(120)
         self._push_btn.clicked.connect(self._on_push)
-        action_bar.addWidget(self._push_btn)
+        action_bar.addWidget(self._push_btn, 0, av)
 
         self._pull_btn = PushButton(FIF.DOWN, t("sync.pull"), self)
-        self._pull_btn.setFixedWidth(120)
         self._pull_btn.clicked.connect(self._on_pull)
-        action_bar.addWidget(self._pull_btn)
+        action_bar.addWidget(self._pull_btn, 0, av)
 
         self._cancel_btn = PushButton(FIF.CLOSE, t("common.cancel"), self)
-        self._cancel_btn.setFixedWidth(100)
         self._cancel_btn.clicked.connect(self._on_cancel)
         self._cancel_btn.hide()
-        action_bar.addWidget(self._cancel_btn)
+        action_bar.addWidget(self._cancel_btn, 0, av)
 
         self._progress = ProgressRing(self)
-        self._progress.setFixedSize(24, 24)
+        self._progress.setFixedSize(20, 20)
         self._progress.hide()
-        action_bar.addWidget(self._progress)
+        action_bar.addWidget(self._progress, 0, av)
+        action_bar.addSpacing(theme.GAP_XS)
 
         self._status_msg = BodyLabel("", self)
-        action_bar.addWidget(self._status_msg)
+        self._status_msg.setStyleSheet(f"color:{theme.text_muted()};")
+        action_bar.addWidget(self._status_msg, 0, av)
         action_bar.addStretch()
         layout.addLayout(action_bar)
 

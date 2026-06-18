@@ -32,6 +32,7 @@ from app.i18n import t
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveType
 from app.core.game_icon import GameIconProvider, IconDownloadWorker, get_plugin_icon
+from app.ui import theme
 
 
 # -----------------------------------------------------------------------
@@ -76,15 +77,6 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
 
 
-_SAVE_TYPE_COLORS: dict[SaveType, str] = {
-    SaveType.SAVESTATE: "#0078d4",
-    SaveType.MEMCARD: "#107c10",
-    SaveType.FOLDER: "#107c10",
-    SaveType.BATTERY: "#ff8c00",
-    SaveType.FILE: "#5c2d91",
-}
-
-
 # -----------------------------------------------------------------------
 # Small widgets
 # -----------------------------------------------------------------------
@@ -100,8 +92,8 @@ class _TypeBadge(QLabel):
         pad = max(24, self.fontMetrics().horizontalAdvance(text) + 14)
         self.setFixedWidth(pad)
         self.setStyleSheet(
-            f"background:{color}; color:white; border-radius:9px; "
-            f"padding:0 5px; font-weight:500;"
+            f"background:{color}; color:{theme.on_accent()}; "
+            f"border-radius:{theme.RADIUS_PILL}px; padding:0 5px; font-weight:500;"
         )
 
 
@@ -139,7 +131,7 @@ class _EmulatorCard(CardWidget):
         platforms = ", ".join(emu.supported_platforms) if emu.supported_platforms else ""
         if platforms:
             plat_label = CaptionLabel(platforms, self)
-            plat_label.setStyleSheet("color:#666;")
+            plat_label.setStyleSheet(f"color:{theme.text_secondary()};")
             col.addWidget(plat_label)
 
         saves_label = CaptionLabel(
@@ -219,7 +211,8 @@ class _GameSaveCard(CardWidget):
 
         emu_label = CaptionLabel(ref.emulator, self)
         emu_label.setStyleSheet(
-            "background:#e0e0e0; color:#444; border-radius:3px; padding:1px 6px;"
+            f"background:{theme.subtle_fill()}; color:{theme.subtle_fill_text()}; "
+            f"border-radius:{theme.RADIUS_SM}px; padding:1px 6px;"
         )
         row1.addWidget(emu_label)
         row1.addStretch()
@@ -233,7 +226,7 @@ class _GameSaveCard(CardWidget):
             key=lambda x: x.value,
         )
         for st in all_types:
-            color = _SAVE_TYPE_COLORS.get(st, "#888")
+            color = theme.status_fill(st.value)
             row2.addWidget(_TypeBadge(t(f"save_type.{st.value}"), color, self))
         row2.addStretch()
         info.addLayout(row2)
@@ -250,7 +243,7 @@ class _GameSaveCard(CardWidget):
                 break
         if crc:
             crc_label = CaptionLabel(f"CRC32: {crc}", self)
-            crc_label.setStyleSheet("color:#0078d4;")
+            crc_label.setStyleSheet(f"color:{theme.accent()};")
             row3.addWidget(crc_label)
 
         total_size = sum(s.total_size for s in saves)
@@ -296,7 +289,7 @@ class _GameSaveCard(CardWidget):
         # Separator line
         sep = QLabel(self)
         sep.setFixedHeight(1)
-        sep.setStyleSheet("background: #e0e0e0;")
+        sep.setStyleSheet(f"background:{theme.divider()};")
         detail_layout.addWidget(sep)
 
         # Collect all save files
@@ -308,20 +301,21 @@ class _GameSaveCard(CardWidget):
         # Header row
         hdr = QHBoxLayout()
         hdr.setSpacing(0)
+        _hdr_css = f"color:{theme.text_muted()}; font-weight:600;"
         hdr_name = CaptionLabel(t("scan.file_name"), self)
-        hdr_name.setStyleSheet("color:#888; font-weight:600;")
+        hdr_name.setStyleSheet(_hdr_css)
         hdr_name.setFixedWidth(260)
         hdr.addWidget(hdr_name)
         hdr_type = CaptionLabel(t("scan.save_type"), self)
-        hdr_type.setStyleSheet("color:#888; font-weight:600;")
+        hdr_type.setStyleSheet(_hdr_css)
         hdr_type.setFixedWidth(90)
         hdr.addWidget(hdr_type)
         hdr_size = CaptionLabel(t("scan.size"), self)
-        hdr_size.setStyleSheet("color:#888; font-weight:600;")
+        hdr_size.setStyleSheet(_hdr_css)
         hdr_size.setFixedWidth(80)
         hdr.addWidget(hdr_size)
         hdr_mod = CaptionLabel(t("scan.last_modified"), self)
-        hdr_mod.setStyleSheet("color:#888; font-weight:600;")
+        hdr_mod.setStyleSheet(_hdr_css)
         hdr.addWidget(hdr_mod)
         hdr.addStretch()
         detail_layout.addLayout(hdr)
@@ -335,14 +329,13 @@ class _GameSaveCard(CardWidget):
             file_label = CaptionLabel(sf.path.name, self)
             file_label.setFixedWidth(260)
             file_label.setToolTip(str(sf.path))
-            file_label.setStyleSheet("color:#000000; font-weight:600;")
+            file_label.setStyleSheet(f"color:{theme.text_primary()}; font-weight:600;")
             frow.addWidget(file_label)
 
             # Type
             type_label = CaptionLabel(t(f"save_type.{sf.save_type.value}"), self)
             type_label.setFixedWidth(90)
-            color = _SAVE_TYPE_COLORS.get(sf.save_type, "#888")
-            type_label.setStyleSheet(f"color:{color};")
+            type_label.setStyleSheet(f"color:{theme.status_text(sf.save_type.value)};")
             frow.addWidget(type_label)
 
             # Size
@@ -486,8 +479,9 @@ class ScanPage(QWidget):
 
     def _init_ui(self) -> None:
         page = QVBoxLayout(self)
-        page.setContentsMargins(36, 20, 36, 20)
-        page.setSpacing(12)
+        page.setContentsMargins(theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V,
+                                theme.PAGE_MARGIN_H, theme.PAGE_MARGIN_V)
+        page.setSpacing(theme.GAP_MD)
 
         # Title
         title = SubtitleLabel(t("scan.title"), self)
@@ -496,37 +490,40 @@ class ScanPage(QWidget):
         page.addWidget(title)
         page.addWidget(desc)
 
-        # Action bar
+        # Action bar — search on the left, status + primary action on the right.
+        # Everything is vertically centred so the button doesn't tower over the
+        # caption beside it.
+        av = Qt.AlignmentFlag.AlignVCenter
         action_bar = QHBoxLayout()
-        action_bar.setSpacing(12)
+        action_bar.setSpacing(theme.GAP_MD)
 
-        self._scan_btn = PrimaryPushButton(FIF.SEARCH, t("scan.start_scan"), self)
-        self._scan_btn.setFixedWidth(120)
-        # Search
+        # Search (left)
         self._search = SearchLineEdit(self)
         self._search.setPlaceholderText(t("common.search"))
         self._search.setFixedWidth(280)
         self._search.textChanged.connect(self._on_search)
-        action_bar.addWidget(self._search)
+        action_bar.addWidget(self._search, 0, av)
 
         action_bar.addStretch()
 
         self._progress = ProgressRing(self)
-        self._progress.setFixedSize(24, 24)
+        self._progress.setFixedSize(20, 20)
         self._progress.hide()
-        action_bar.addWidget(self._progress)
+        action_bar.addWidget(self._progress, 0, av)
 
         self._status_label = CaptionLabel("", self)
-        action_bar.addWidget(self._status_label)
+        self._status_label.setStyleSheet(f"color:{theme.text_muted()};")
+        action_bar.addWidget(self._status_label, 0, av)
+        action_bar.addSpacing(theme.GAP_SM)
 
+        self._scan_btn = PrimaryPushButton(FIF.SEARCH, t("scan.start_scan"), self)
         self._scan_btn.clicked.connect(self._on_scan)
-        action_bar.addWidget(self._scan_btn)
+        action_bar.addWidget(self._scan_btn, 0, av)
 
         self._cancel_btn = PushButton(FIF.CLOSE, t("common.cancel"), self)
-        self._cancel_btn.setFixedWidth(100)
         self._cancel_btn.clicked.connect(self._on_cancel)
         self._cancel_btn.hide()
-        action_bar.addWidget(self._cancel_btn)
+        action_bar.addWidget(self._cancel_btn, 0, av)
 
         page.addLayout(action_bar)
 
@@ -572,7 +569,7 @@ class ScanPage(QWidget):
         # Empty state
         self._empty_label = BodyLabel(t("common.no_data"), self)
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_label.setStyleSheet("color: #888;")
+        self._empty_label.setStyleSheet(f"color:{theme.text_muted()};")
         page.addWidget(self._empty_label)
 
     # ------------------------------------------------------------------

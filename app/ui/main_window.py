@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QSize, QTimer
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import QSize, QTimer
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication
 
 from qfluentwidgets import (
@@ -11,6 +11,7 @@ from qfluentwidgets import (
     NavigationItemPosition,
     FluentIcon as FIF,
     setTheme,
+    setThemeColor,
     Theme,
 )
 
@@ -46,6 +47,12 @@ class MainWindow(FluentWindow):
         self.setMinimumSize(QSize(960, 640))
         self.resize(1100, 720)
 
+        # Win11 Mica backdrop — a no-op on platforms that don't support it.
+        try:
+            self.setMicaEffectEnabled(True)
+        except Exception:  # pragma: no cover - platform/DWM dependent
+            pass
+
         # Center on screen
         desktop = QApplication.primaryScreen().availableGeometry()
         x = (desktop.width() - self.width()) // 2
@@ -80,6 +87,16 @@ class MainWindow(FluentWindow):
             setTheme(Theme.LIGHT)
         else:
             setTheme(Theme.AUTO)
+        self._apply_system_accent()
+
+    def _apply_system_accent(self) -> None:
+        """Follow the OS accent colour (Qt 6.6+ exposes it via QPalette)."""
+        try:
+            accent = QApplication.palette().color(QPalette.ColorRole.Accent)
+            if accent.isValid():
+                setThemeColor(accent, save=False)
+        except (AttributeError, Exception):  # pragma: no cover - Qt-version dependent
+            pass
 
     # ------------------------------------------------------------------
     # Public
