@@ -552,7 +552,10 @@ class ScanPage(QWidget):
         self._emu_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._emu_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._emu_scroll.enableTransparentBackground()
-        self._emu_scroll.setFixedHeight(100)
+        # Height matches the inner card exactly — no dead space below it, so the
+        # gap to the count row stays equal to every other gap (the scrollbar is
+        # an overlay and doesn't reserve layout space).
+        self._emu_scroll.setFixedHeight(90)
         self._emu_scroll.hide()
         self._emu_scroll_inner = QWidget()
         self._emu_scroll_inner.setStyleSheet("background: transparent;")
