@@ -39,6 +39,7 @@ from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
 from app.ui.components.empty_state import EmptyState
 from app.ui.components.avatar import letter_avatar
+from app.ui.components.skeleton import SkeletonCard
 
 
 # -----------------------------------------------------------------------
@@ -455,6 +456,7 @@ class ScanPage(QWidget):
         self._icon_provider: GameIconProvider | None = None
         self._game_cards: list[_GameSaveCard] = []
         self._emu_cards: list[_EmulatorCard] = []
+        self._skeletons: list[SkeletonCard] = []
         self._cache_file: Path | None = None
         self._init_ui()
 
@@ -610,12 +612,33 @@ class ScanPage(QWidget):
         self.setFocus()  # prevent focus jumping to search bar
         self._progress.show()
         self._status_label.setText(t("scan.scanning"))
+        self._show_skeletons()
 
         self._worker = _ScanWorker(self)
         self._worker.set_scanner(self._scanner)
         self._worker.finished.connect(self._on_scan_finished)
         self._worker.error.connect(self._on_scan_error)
         self._worker.start()
+
+    def _show_skeletons(self, count: int = 3) -> None:
+        """Replace the card list with loading skeletons while scanning."""
+        self._clear_skeletons()
+        for c in self._game_cards:
+            self._card_layout.removeWidget(c)
+            c.deleteLater()
+        self._game_cards.clear()
+        for _ in range(count):
+            sk = SkeletonCard(self._scroll_inner)
+            self._card_layout.insertWidget(self._card_layout.count() - 1, sk)
+            self._skeletons.append(sk)
+        self._empty.setVisible(False)
+        self._scroll.setVisible(True)
+
+    def _clear_skeletons(self) -> None:
+        for sk in self._skeletons:
+            self._card_layout.removeWidget(sk)
+            sk.deleteLater()
+        self._skeletons.clear()
 
     def _on_cancel(self) -> None:
         if self._worker is not None and self._worker.isRunning():
@@ -691,6 +714,9 @@ class ScanPage(QWidget):
         self._cancel_btn.hide()
         self._progress.hide()
         self._status_label.setText("")
+        self._clear_skeletons()
+        self._scroll.setVisible(bool(self._game_cards))
+        self._empty.setVisible(not self._game_cards)
         InfoBar.error(
             title=t("common.error"), content=error,
             parent=self, position=InfoBarPosition.TOP, duration=5000,
@@ -725,6 +751,7 @@ class ScanPage(QWidget):
         self._emu_scroll.setVisible(n > 0)
 
     def _refresh_game_cards(self, filter_text: str = "") -> None:
+        self._clear_skeletons()
         for c in self._game_cards:
             self._card_layout.removeWidget(c)
             c.deleteLater()
