@@ -2,6 +2,13 @@
     "app": {
         "name": "エミュレータセーブマネージャ"
     },
+    "tray": {
+        "show": "ウィンドウを表示",
+        "auto_backup_now": "今すぐ自動バックアップ",
+        "quit": "終了",
+        "still_running_title": "トレイに最小化しました",
+        "still_running_desc": "自動バックアップはバックグラウンドで続行します。"
+    },
     "nav": {
         "home": "ホーム",
         "scan": "スキャン",

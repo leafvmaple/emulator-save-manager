@@ -2,6 +2,13 @@
     "app": {
         "name": "模拟器存档管理器"
     },
+    "tray": {
+        "show": "显示窗口",
+        "auto_backup_now": "立即自动备份",
+        "quit": "退出",
+        "still_running_title": "已最小化到托盘",
+        "still_running_desc": "自动备份会继续在后台运行。"
+    },
     "nav": {
         "home": "主页",
         "scan": "扫描",

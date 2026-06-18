@@ -77,9 +77,43 @@ def test_auto_backup_wiring(qtbot, cfg):
     assert hasattr(w, "start_auto_backup_cycle")
     assert hasattr(w.backup_page, "auto_backup")
     assert hasattr(w.scan_page, "is_scanning")
+    assert hasattr(w, "show_from_tray")
+    assert hasattr(w, "quit_from_tray")
     # interval defaults to 0 → no timer created.
     assert w._auto_timer is None
 
+
+def test_mainwindow_hides_to_tray_instead_of_closing(qtbot, cfg):
+    from PySide6.QtGui import QCloseEvent
+    from app.ui.main_window import MainWindow
+
+    class FakeTrayIcon:
+        def __init__(self) -> None:
+            self.hidden = False
+            self.messages = []
+
+        def isVisible(self) -> bool:  # noqa: N802
+            return not self.hidden
+
+        def hide(self) -> None:
+            self.hidden = True
+
+        def showMessage(self, *args) -> None:  # noqa: ANN002, N802
+            self.messages.append(args)
+
+    w = MainWindow(cfg)
+    qtbot.addWidget(w)
+    w._tray_icon = FakeTrayIcon()
+    w.show()
+
+    assert w._hide_to_tray() is True
+    assert not w.isVisible()
+
+    w.show()
+    event = QCloseEvent()
+    w.closeEvent(event)
+    assert not event.isAccepted()
+    assert not w.isVisible()
 
 def test_home_first_run_onboarding_hides_after_scan(qtbot, cfg):
     from app.ui.pages.home_page import HomePage

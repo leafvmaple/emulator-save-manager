@@ -2,6 +2,13 @@
     "app": {
         "name": "Emulator Save Manager"
     },
+    "tray": {
+        "show": "Show Window",
+        "auto_backup_now": "Auto-backup Now",
+        "quit": "Quit",
+        "still_running_title": "Minimized to tray",
+        "still_running_desc": "Automatic backups will keep running in the background."
+    },
     "nav": {
         "home": "Home",
         "scan": "Scan",

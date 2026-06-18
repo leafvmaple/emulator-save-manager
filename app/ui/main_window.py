@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, QTimer
-from PySide6.QtGui import QPalette, QIcon
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QEvent, QSize, QTimer
+from PySide6.QtGui import QAction, QCloseEvent, QIcon, QPalette
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from qfluentwidgets import (
     FluentWindow,
@@ -35,8 +35,16 @@ class MainWindow(FluentWindow):
         self._cfg = config
         self._auto_backup_pending = False
         self._auto_timer: QTimer | None = None
+        self._allow_close = False
+        self._tray_notice_shown = False
+        self._tray_icon: QSystemTrayIcon | None = None
+        self._tray_menu: QMenu | None = None
+        self._tray_show_action: QAction | None = None
+        self._tray_backup_action: QAction | None = None
+        self._tray_quit_action: QAction | None = None
         self._init_window()
         self._init_pages()
+        self._setup_tray()
         self._apply_theme()
         self.scan_page.saves_updated.connect(self._on_saves_updated)
         # Custom-painted colours are resolved at build time, so re-apply them
@@ -145,12 +153,106 @@ class MainWindow(FluentWindow):
             page.restyle()
 
     # ------------------------------------------------------------------
+    # System tray
+    # ------------------------------------------------------------------
+
+    def _setup_tray(self) -> None:
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+
+        app = QApplication.instance()
+        if app is not None:
+            app.setQuitOnLastWindowClosed(False)
+
+        self._tray_menu = QMenu(self)
+        self._tray_show_action = self._tray_menu.addAction("")
+        self._tray_show_action.triggered.connect(self.show_from_tray)
+        self._tray_backup_action = self._tray_menu.addAction("")
+        self._tray_backup_action.triggered.connect(self.start_auto_backup_cycle)
+        self._tray_menu.addSeparator()
+        self._tray_quit_action = self._tray_menu.addAction("")
+        self._tray_quit_action.triggered.connect(self.quit_from_tray)
+
+        self._tray_icon = QSystemTrayIcon(QIcon(str(app_icon_path())), self)
+        self._tray_icon.setContextMenu(self._tray_menu)
+        self._tray_icon.activated.connect(self._on_tray_activated)
+        self._refresh_tray_text()
+        self._tray_icon.show()
+
+    def _refresh_tray_text(self) -> None:
+        if self._tray_icon is not None:
+            self._tray_icon.setToolTip(t("app.name"))
+        if self._tray_show_action is not None:
+            self._tray_show_action.setText(t("tray.show"))
+        if self._tray_backup_action is not None:
+            self._tray_backup_action.setText(t("tray.auto_backup_now"))
+        if self._tray_quit_action is not None:
+            self._tray_quit_action.setText(t("tray.quit"))
+
+    def _is_tray_enabled(self) -> bool:
+        return self._tray_icon is not None and self._tray_icon.isVisible()
+
+    def _hide_to_tray(self) -> bool:
+        if not self._is_tray_enabled():
+            return False
+
+        self.hide()
+        if not self._tray_notice_shown and QSystemTrayIcon.supportsMessages():
+            self._tray_icon.showMessage(
+                t("tray.still_running_title"),
+                t("tray.still_running_desc"),
+                QSystemTrayIcon.MessageIcon.Information,
+                3000,
+            )
+            self._tray_notice_shown = True
+        return True
+
+    def show_from_tray(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def quit_from_tray(self) -> None:
+        self._allow_close = True
+        if self._tray_icon is not None:
+            self._tray_icon.hide()
+        self.close()
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
+
+    def _on_tray_activated(
+        self,
+        reason: QSystemTrayIcon.ActivationReason,
+    ) -> None:
+        show_reasons = (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        )
+        if reason in show_reasons:
+            self.show_from_tray()
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange and self.isMinimized():
+            QTimer.singleShot(0, self._hide_to_tray)
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        if self._allow_close or not self._is_tray_enabled():
+            super().closeEvent(event)
+            return
+
+        event.ignore()
+        self._hide_to_tray()
+
+    # ------------------------------------------------------------------
     # Public
     # ------------------------------------------------------------------
 
     def refresh_titles(self) -> None:
         """Refresh all navigation labels after a language change."""
         self.setWindowTitle(t("app.name"))
+        self._refresh_tray_text()
         # Page titles are refreshed internally by each page
 
     def get_config(self) -> Config:
@@ -163,6 +265,8 @@ class MainWindow(FluentWindow):
     def start_auto_backup_cycle(self) -> None:
         """Scan, then auto-backup changed saves once the scan finishes."""
         self._auto_backup_pending = True
+        if self.scan_page.is_scanning:
+            return
         self.scan_page.start_scan()
 
     def _setup_auto_backup_timer(self) -> None:
