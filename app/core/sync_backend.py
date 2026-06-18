@@ -163,8 +163,12 @@ class WebDavBackend(SyncBackend):
             return None
         try:
             from webdav4.client import Client
+            # Explicit per-phase timeout: httpx defaults to 5s, too short for
+            # multi-MB memcard uploads on a slow link, yet we still want a dead
+            # server to fail rather than hang the sync thread forever.
             self._client_obj = Client(
                 self._url, auth=(self._username, self._password),
+                timeout=30.0,   # forwarded to httpx (default 5s is too short for uploads)
             )
         except Exception as e:  # noqa: BLE001
             self._client_err = str(e)
