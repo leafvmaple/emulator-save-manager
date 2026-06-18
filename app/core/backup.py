@@ -28,6 +28,92 @@ from app.core.conflict import zip_content_hash
 from app.core.path_resolver import to_portable_path
 from app.core.state_thumbnail import add_backup_thumbnail
 
+_SIZE_ANOMALY_MIN_BASELINE_BYTES = 128 * 1024
+_SIZE_ANOMALY_MIN_DELTA_BYTES = 128 * 1024
+_SIZE_ANOMALY_SHRINK_RATIO = 0.25
+_SIZE_ANOMALY_GROW_RATIO = 4.0
+
+
+def source_size_snapshot(saves: list[GameSave]) -> dict[str, int]:
+    """Return a stable map of live save archive keys to uncompressed sizes."""
+    entries: dict[str, int] = {}
+    for gs in saves:
+        for sf in gs.save_files:
+            try:
+                if sf.path.is_dir():
+                    for f in sf.path.rglob("*"):
+                        if f.is_file():
+                            key = f"{sf.save_type.value}/{sf.path.name}/{f.relative_to(sf.path).as_posix()}"
+                            entries[key] = f.stat().st_size
+                elif sf.path.is_file():
+                    entries[f"{sf.save_type.value}/{sf.path.name}"] = sf.path.stat().st_size
+            except OSError:
+                continue
+    return entries
+
+
+def backup_size_snapshot(zip_path: Path) -> dict[str, int]:
+    """Return archive member sizes comparable with ``source_size_snapshot``."""
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            return {
+                info.filename: info.file_size
+                for info in zf.infolist()
+                if not info.is_dir() and not info.filename.startswith("thumbnails/")
+            }
+    except (OSError, zipfile.BadZipFile):
+        return {}
+
+
+def detect_save_size_anomaly(
+    saves: list[GameSave],
+    latest_backup: BackupRecord,
+) -> SaveSizeAnomaly | None:
+    """Detect suspicious live-save size changes before auto-backup.
+
+    This intentionally only runs for automatic backups. Manual backups remain
+    possible when a user knows a large shrink/growth is legitimate.
+    """
+    if not saves:
+        return None
+
+    previous_size = sum(backup_size_snapshot(latest_backup.backup_path).values())
+    current_size = sum(source_size_snapshot(saves).values())
+    if previous_size < _SIZE_ANOMALY_MIN_BASELINE_BYTES:
+        return None
+
+    delta = abs(current_size - previous_size)
+    if delta < _SIZE_ANOMALY_MIN_DELTA_BYTES:
+        return None
+
+    ref = saves[0]
+    if current_size == 0 or current_size < previous_size * _SIZE_ANOMALY_SHRINK_RATIO:
+        return SaveSizeAnomaly(
+            game_name=ref.game_name,
+            game_id=ref.game_id,
+            previous_size=previous_size,
+            current_size=current_size,
+            reason="unexpected shrink",
+        )
+    if current_size > previous_size * _SIZE_ANOMALY_GROW_RATIO:
+        return SaveSizeAnomaly(
+            game_name=ref.game_name,
+            game_id=ref.game_id,
+            previous_size=previous_size,
+            current_size=current_size,
+            reason="unexpected growth",
+        )
+    return None
+
+
+def _format_bytes(size_bytes: int) -> str:
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    if size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    if size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
 
 def source_content_hash(saves: list[GameSave]) -> str:
     """SHA-256 over the live save files of a game (order-independent).
@@ -62,6 +148,31 @@ def source_content_hash(saves: list[GameSave]) -> str:
             continue
     return h.hexdigest()
 
+
+@dataclass(frozen=True)
+class SaveSizeAnomaly:
+    """A suspicious size change that should not be auto-backed up silently."""
+
+    game_name: str
+    game_id: str
+    previous_size: int
+    current_size: int
+    reason: str
+
+    def message(self) -> str:
+        return (
+            f"{self.game_name}: save size anomaly ({self.reason}; "
+            f"previous {_format_bytes(self.previous_size)}, "
+            f"current {_format_bytes(self.current_size)})"
+        )
+
+
+class SaveSizeAnomalyError(RuntimeError):
+    """Raised when auto-backup sees a suspicious save-size change."""
+
+    def __init__(self, anomaly: SaveSizeAnomaly) -> None:
+        self.anomaly = anomaly
+        super().__init__(anomaly.message())
 
 @dataclass
 class AutoBackupResult:
@@ -251,6 +362,9 @@ class BackupManager:
 
         existing = self.list_backups(ref.emulator, ref.game_id)
         if existing:
+            anomaly = detect_save_size_anomaly(saves, existing[0])
+            if anomaly is not None:
+                raise SaveSizeAnomalyError(anomaly)
             stored = self._read_source_hash(existing[0].backup_path)
             if stored and stored == live_hash:
                 logger.debug("Auto-backup skipped (unchanged): {}", ref.game_name)

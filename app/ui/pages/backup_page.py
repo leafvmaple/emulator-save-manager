@@ -301,8 +301,14 @@ class BackupPage(QWidget):
         self._auto_worker.start()
 
     def _on_auto_backup_finished(self, result) -> None:  # noqa: ANN001
+        if result.errors:
+            InfoBar.warning(
+                title=t("backup.auto_backup_warning"),
+                content="\n".join(result.errors[:3]),
+                parent=self, position=InfoBarPosition.TOP, duration=7000,
+            )
         # Stay quiet when nothing changed, so periodic cycles aren't noisy.
-        if result.backed_up > 0:
+        elif result.backed_up > 0:
             InfoBar.success(
                 title=t("backup.auto_backup_done"),
                 content=t("backup.auto_backup_summary",
@@ -311,7 +317,6 @@ class BackupPage(QWidget):
             )
         # Refresh card counts (a new backup may have been created).
         self._refresh_cards()
-
     # ------------------------------------------------------------------
     # UI Setup
     # ------------------------------------------------------------------

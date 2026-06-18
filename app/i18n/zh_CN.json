@@ -85,6 +85,7 @@
         "backup_fail": "备份失败: {error}",
         "no_selection": "请先选择要备份的存档",
         "file_group": "{type} ({count} 个文件)",
+        "auto_backup_warning": "自动备份已跳过异常存档",
         "auto_backup_done": "自动备份完成",
         "auto_backup_summary": "已备份 {backed} 个，{skipped} 个无变化"
     },

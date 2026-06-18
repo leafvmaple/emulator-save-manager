@@ -13,6 +13,7 @@ A cross-platform emulator save manager with multi-device sync. Auto-detects inst
 
 - **Auto Scan** — Automatically detect installed emulators and enumerate all game saves (memory cards, save states, battery saves, folder saves)
 - **Versioned Backup** — Create ZIP-based versioned backups with sidecar JSON metadata; auto-rotate old backups per configurable limit
+- **Automatic Backup Guard** — Run changed-save backups on a schedule and skip suspicious save-size drops/growth before they pollute the backup chain
 - **One-click Restore** — Preview changes before restoring; warns when local saves are newer than the backup
 - **Multi-device Sync** — Push/pull backups through a shared folder (OneDrive, Google Drive, Nutstore, etc.) with conflict detection and resolution
 - **Portable Paths** — Backup metadata uses placeholders (`${DOCUMENTS}`, `${APPDATA}`, …) so archives work across machines even when the Documents folder is relocated
@@ -142,6 +143,22 @@ Key settings:
 | `backup_path` | `<data_dir>/backups` | Backup storage location |
 | `sync_folder` | — | Shared folder path for multi-device sync |
 
+## Headless Auto-backup
+
+For background automation, run without showing the GUI:
+
+```bash
+# Scan once and back up changed saves
+python main.py --auto-backup-once
+
+# Keep running and repeat every 30 minutes
+python main.py --auto-backup-daemon --auto-backup-interval-minutes 30
+```
+
+The daemon mode is designed to be launched by Windows Task Scheduler, macOS
+LaunchAgent, or a Linux systemd user service. Automatic backups skip suspicious
+save-size changes (for example a large save suddenly becoming empty) so a bad
+write is not silently preserved as the latest backup.
 ## Multi-device Sync
 
 1. Set a **Sync Directory** in Settings (e.g. a OneDrive / Google Drive / Nutstore synced folder)

@@ -70,3 +70,46 @@ def test_source_hash_recorded_in_metadata(cfg, make_game_save, tmp_path):
     record = BackupManager(cfg).create_backup([gs])
     meta = json.loads(record.backup_path.with_suffix(".json").read_text(encoding="utf-8"))
     assert meta["source_hash"] == source_content_hash([gs])
+
+
+def test_auto_backup_skips_large_size_shrink(cfg, make_game_save, tmp_path):
+    root = tmp_path / "s"
+    gs = make_game_save(root, files={"a.bin": b"A" * (512 * 1024)})
+    bm = BackupManager(cfg)
+
+    assert bm.auto_backup_all([gs]).backed_up == 1
+    (root / "a.bin").write_bytes(b"x")
+
+    result = bm.auto_backup_all([gs])
+    assert result.backed_up == 0
+    assert result.errors and "save size anomaly" in result.errors[0]
+    assert len(bm.list_backups(gs.emulator, gs.game_id)) == 1
+
+
+def test_headless_auto_backup_once_runs_scan_then_backup():
+    from app.core.auto_backup import run_auto_backup_once
+    from app.core.backup import AutoBackupResult
+
+    class FakeScanner:
+        def __init__(self) -> None:
+            self.called = False
+
+        def full_scan(self, should_cancel=None):  # noqa: ANN001
+            self.called = True
+            return ["emu"], ["save"]
+
+    class FakeBackupManager:
+        def __init__(self) -> None:
+            self.saves = None
+
+        def auto_backup_all(self, saves):  # noqa: ANN001
+            self.saves = saves
+            return AutoBackupResult(backed_up=1)
+
+    scanner = FakeScanner()
+    backup_manager = FakeBackupManager()
+    result = run_auto_backup_once(scanner, backup_manager)
+
+    assert scanner.called is True
+    assert backup_manager.saves == ["save"]
+    assert result.backup.backed_up == 1

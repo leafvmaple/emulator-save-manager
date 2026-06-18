@@ -85,6 +85,7 @@
         "backup_fail": "Backup failed: {error}",
         "no_selection": "Please select saves to back up first",
         "file_group": "{type} ({count} files)",
+        "auto_backup_warning": "Auto-backup skipped suspicious saves",
         "auto_backup_done": "Auto-backup complete",
         "auto_backup_summary": "{backed} backed up, {skipped} unchanged"
     },

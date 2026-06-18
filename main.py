@@ -52,6 +52,11 @@ def main() -> None:
     sync_mgr = SyncManager(config, backup_mgr)
     icon_provider = GameIconProvider(config.data_dir / "icons")
 
+    # Optional headless auto-backup modes. These intentionally run before
+    # QApplication is created, so they can be used by a background task.
+    if "--auto-backup-once" in sys.argv or "--auto-backup-daemon" in sys.argv:
+        _run_headless_auto_backup(sys.argv, config, scanner, backup_mgr)
+
     # ---- 6. Qt Application ----
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough,
@@ -100,6 +105,51 @@ def main() -> None:
 
     sys.exit(app.exec())
 
+
+def _arg_int(argv: list[str], name: str, default: int) -> int:
+    try:
+        idx = argv.index(name)
+        return int(argv[idx + 1])
+    except (ValueError, IndexError, TypeError):
+        return default
+
+
+def _run_headless_auto_backup(
+    argv: list[str],
+    config: Config,
+    scanner: Scanner,
+    backup_mgr: BackupManager,
+) -> None:
+    """Run automatic backups without showing the GUI."""
+    import signal
+    import threading
+
+    from app.core.auto_backup import run_auto_backup_loop, run_auto_backup_once
+
+    if "--auto-backup-once" in argv:
+        result = run_auto_backup_once(scanner, backup_mgr)
+        sys.exit(1 if result.backup.errors else 0)
+
+    minutes = _arg_int(
+        argv,
+        "--auto-backup-interval-minutes",
+        config.auto_backup_interval_minutes or 30,
+    )
+    minutes = max(1, minutes)
+    stop_event = threading.Event()
+
+    def _stop(_signum, _frame) -> None:  # noqa: ANN001
+        logger.info("Stopping headless auto-backup daemon")
+        stop_event.set()
+
+    for signame in ("SIGINT", "SIGTERM"):
+        sig = getattr(signal, signame, None)
+        if sig is not None:
+            signal.signal(sig, _stop)
+
+    logger.info("Starting headless auto-backup daemon: every {} minutes", minutes)
+    run_auto_backup_loop(scanner, backup_mgr, minutes * 60, stop_event)
+    sys.exit(0)
 
 def _selftest(pm: "PluginManager") -> None:
     """Verify bundled resources loaded, then exit (0 = OK, 1 = broken).

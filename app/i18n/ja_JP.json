@@ -85,6 +85,7 @@
         "backup_fail": "バックアップ失敗: {error}",
         "no_selection": "バックアップするセーブを選択してください",
         "file_group": "{type} ({count} ファイル)",
+        "auto_backup_warning": "異常なセーブをスキップしました",
         "auto_backup_done": "自動バックアップ完了",
         "auto_backup_summary": "{backed} 件バックアップ、{skipped} 件変更なし"
     },
