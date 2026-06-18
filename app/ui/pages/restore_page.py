@@ -13,8 +13,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QThread
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, Signal, QThread, QPoint
+from PySide6.QtGui import QFont, QPainter, QPen, QColor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
 )
@@ -24,7 +24,7 @@ from qfluentwidgets import (
     CardWidget, SimpleCardWidget, SmoothScrollArea, CheckBox,
     FluentIcon as FIF, InfoBar, InfoBarPosition, InfoBadge,
     MessageBox, MessageBoxBase, LineEdit, ProgressRing, IconWidget,
-    setFont,
+    isDarkTheme, setFont,
 )
 from loguru import logger
 
@@ -253,8 +253,15 @@ class _DiffDialog(MessageBoxBase):
 # Version sub-card
 # -----------------------------------------------------------------------
 
-class _VersionCard(SimpleCardWidget):
-    """A compact card representing a single backup version."""
+class _VersionCard(QWidget):
+    """One backup version, rendered as a node on the game's version timeline.
+
+    A dot + connecting rail is painted in the left gutter; the newest version's
+    dot is accent-coloured.  The version chip is neutral so the accent lives on
+    the timeline.
+    """
+
+    _RAIL_X = 18  # gutter centre for the dot/line
 
     restore_clicked = Signal(object)  # emits BackupRecord
     pin_clicked = Signal(object)      # emits BackupRecord
@@ -266,23 +273,33 @@ class _VersionCard(SimpleCardWidget):
         self,
         record: BackupRecord,
         prev_record: BackupRecord | None = None,
+        is_first: bool = False,
+        is_last: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.record = record
         self._prev_record = prev_record
+        self._is_first = is_first
+        self._is_last = is_last
         self.setFixedHeight(56)
+        self.setObjectName("versionRow")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(
+            f"#versionRow:hover {{ background:{theme.subtle_fill()}; "
+            f"border-radius:{theme.RADIUS_SM}px; }}"
+        )
 
         root = QHBoxLayout(self)
-        root.setContentsMargins(16, 8, 16, 8)
+        root.setContentsMargins(38, 8, 12, 8)  # left gutter holds the rail
         root.setSpacing(12)
 
-        # Version badge
+        # Version chip — neutral; the timeline dot carries the accent.
         ver_label = QLabel(f"v{record.version}", self)
-        ver_label.setFixedSize(36, 24)
+        ver_label.setFixedSize(34, 22)
         ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ver_label.setStyleSheet(
-            f"background:{theme.accent()}; color:{theme.on_accent()}; "
+            f"background:{theme.subtle_fill()}; color:{theme.subtle_fill_text()}; "
             f"border-radius:{theme.RADIUS_SM}px; font-weight:600; font-size:12px;"
         )
         root.addWidget(ver_label)
@@ -356,6 +373,31 @@ class _VersionCard(SimpleCardWidget):
         delete_btn.setToolTip(t("common.delete"))
         delete_btn.clicked.connect(lambda: self.delete_clicked.emit(self.record))
         root.addWidget(delete_btn)
+
+    def paintEvent(self, e) -> None:  # noqa: ANN001
+        super().paintEvent(e)
+        cx, cy = self._RAIL_X, self.height() // 2
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Connecting rail (trimmed at the ends of the timeline).
+        line = QColor(255, 255, 255, 40) if isDarkTheme() else QColor(0, 0, 0, 38)
+        pen = QPen(line)
+        pen.setWidth(2)
+        p.setPen(pen)
+        if not self._is_first:
+            p.drawLine(cx, 0, cx, cy)
+        if not self._is_last:
+            p.drawLine(cx, cy, cx, self.height())
+
+        # Node dot — accent for the newest version, muted otherwise.
+        if self._is_first:
+            dot = QColor(theme.accent())
+        else:
+            dot = QColor(255, 255, 255, 120) if isDarkTheme() else QColor(0, 0, 0, 95)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(dot)
+        p.drawEllipse(QPoint(cx, cy), 5, 5)
 
 
 # -----------------------------------------------------------------------
@@ -476,13 +518,17 @@ class _GameBackupCard(CardWidget):
         self._body = QWidget(self)
         self._body.hide()
         body_layout = QVBoxLayout(self._body)
-        body_layout.setContentsMargins(0, 4, 0, 4)
-        body_layout.setSpacing(6)
+        body_layout.setContentsMargins(0, 2, 0, 6)
+        body_layout.setSpacing(0)  # rows touch so the timeline rail is continuous
 
         for idx, r in enumerate(records):
             # records are newest-first, so the next entry is the older version.
             prev = records[idx + 1] if idx + 1 < len(records) else None
-            vc = _VersionCard(r, prev_record=prev, parent=self._body)
+            vc = _VersionCard(
+                r, prev_record=prev,
+                is_first=(idx == 0), is_last=(idx == len(records) - 1),
+                parent=self._body,
+            )
             vc.restore_clicked.connect(self.restore_requested.emit)
             vc.pin_clicked.connect(self.pin_requested.emit)
             vc.label_clicked.connect(self.label_requested.emit)
