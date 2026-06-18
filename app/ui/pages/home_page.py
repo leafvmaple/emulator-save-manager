@@ -176,7 +176,7 @@ class HomePage(QWidget):
         hero = QHBoxLayout()
         hero.setSpacing(theme.GAP_LG)
         logo = QLabel(container)
-        logo.setFixedSize(56, 56)
+        logo.setFixedSize(72, 72)  # spans the title + subtitle + version block
         logo.setScaledContents(True)
         logo.setPixmap(QPixmap(str(app_icon_path())))
         hero.addWidget(logo, 0, Qt.AlignmentFlag.AlignVCenter)
