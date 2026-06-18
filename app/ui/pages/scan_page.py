@@ -578,9 +578,10 @@ class ScanPage(QWidget):
         self._scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         self._scroll_inner = QWidget()
         self._card_layout = QVBoxLayout(self._scroll_inner)
-        self._card_layout.setContentsMargins(theme.GAP_XS, theme.GAP_XS,
-                                             theme.GAP_XS, theme.GAP_XS)
-        self._card_layout.setSpacing(theme.GAP_SM)
+        # No top margin: the gap above the first card is just the page spacing,
+        # matching the card-to-card spacing for an even vertical rhythm.
+        self._card_layout.setContentsMargins(theme.GAP_XS, 0, theme.GAP_XS, theme.GAP_XS)
+        self._card_layout.setSpacing(theme.GAP_MD)
         self._card_layout.addStretch()
         self._scroll.setWidget(self._scroll_inner)
         page.addWidget(self._scroll, stretch=1)
