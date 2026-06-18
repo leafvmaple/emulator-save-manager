@@ -1,3 +1,28 @@
+# v0.9.2
+
+Released on 2026-06-18
+
+## ✨ Features
+
+- feat(ui): flatter, lighter app icon (`13da23c`)
+- feat(ui): empty-state action buttons + About card polish (`679907c`)
+- feat(sync): redesign the status card (`7e445c4`)
+- feat(scan): animate the card file-detail expand/collapse (`a6e54a0`)
+- feat(ui): hover elevation on interactive cards (`8487781`)
+- feat(restore): render backup versions as a vertical timeline (`190aaaa`)
+
+## 🐛 Bug Fixes
+
+- fix(settings): restore About card height (was collapsing to a strip) (`b215ee1`)
+- fix(ui): even card-list whitespace via one shared helper (`0fba2ef`)
+- fix(scan): remove emulator-row dead space that broke the vertical rhythm (`e931240`)
+
+## 📦 Other Changes
+
+- revert(ui): remove hover-elevation effect (caused card jitter) (`c7e7a9a`)
+
+---
+
 # v0.9.1
 
 Released on 2026-06-18
