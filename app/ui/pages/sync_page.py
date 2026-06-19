@@ -3,27 +3,40 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal, QThread
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-)
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 from qfluentwidgets import (
     SubtitleLabel, BodyLabel, CaptionLabel, StrongBodyLabel,
     PrimaryPushButton, PushButton, CardWidget, IconWidget,
-    FluentIcon as FIF, InfoBar, InfoBarPosition, ProgressRing, setFont,
+    FluentIcon as FIF, InfoBar, InfoBarPosition, ProgressBar, ProgressRing, setFont,
 )
 
 from app.i18n import t
-from app.core.sync import SyncResult
+from app.core.sync import SyncProgress, SyncResult
 from app.core.conflict import ConflictInfo, ConflictResolution
 from app.ui import theme
 from app.ui.components.page_header import PageHeader
 from app.ui.components.conflict_dialog import ConflictDialog, BatchConflictDialog
 
 
+def _format_size(size_bytes: int) -> str:
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    if size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    if size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
+def _short_text(text: str, limit: int = 42) -> str:
+    return text if len(text) <= limit else text[:limit - 3] + "..."
+
+
 class _SyncWorker(QThread):
     """Background thread for sync operations."""
 
     finished = Signal(object)  # SyncResult
+    progress = Signal(object)  # SyncProgress
     error = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -39,11 +52,20 @@ class _SyncWorker(QThread):
         try:
             cancel = self.isInterruptionRequested
             if self._mode == "push":
-                result = self._sync_manager.push_all(should_cancel=cancel)
+                result = self._sync_manager.push_all(
+                    should_cancel=cancel,
+                    progress_callback=self.progress.emit,
+                )
             elif self._mode == "pull":
-                result = self._sync_manager.pull_all(should_cancel=cancel)
+                result = self._sync_manager.pull_all(
+                    should_cancel=cancel,
+                    progress_callback=self.progress.emit,
+                )
             else:
-                result = self._sync_manager.sync_all(should_cancel=cancel)
+                result = self._sync_manager.sync_all(
+                    should_cancel=cancel,
+                    progress_callback=self.progress.emit,
+                )
             self.finished.emit(result)
         except Exception as e:
             self.error.emit(str(e))
@@ -175,6 +197,20 @@ class SyncPage(QWidget):
         action_bar.addStretch()
         layout.addLayout(action_bar)
 
+        self._progress_panel = QWidget(self)
+        progress_lay = QVBoxLayout(self._progress_panel)
+        progress_lay.setContentsMargins(0, 0, 0, 0)
+        progress_lay.setSpacing(theme.GAP_XS)
+        self._progress_detail = CaptionLabel("", self._progress_panel)
+        self._progress_detail.setStyleSheet(f"color:{theme.text_muted()};")
+        progress_lay.addWidget(self._progress_detail)
+        self._progress_bar = ProgressBar(self._progress_panel)
+        self._progress_bar.setRange(0, 100)
+        self._progress_bar.setValue(0)
+        progress_lay.addWidget(self._progress_bar)
+        self._progress_panel.hide()
+        layout.addWidget(self._progress_panel)
+
         # Sync log area
         self._log_label = SubtitleLabel(t("sync.sync_complete"), self)
         self._log_label.hide()
@@ -273,10 +309,15 @@ class SyncPage(QWidget):
         self._cancel_btn.setEnabled(True)
         self._cancel_btn.show()
         self._progress.show()
+        self._progress_panel.show()
+        self._progress_bar.setRange(0, 0)
+        self._progress_bar.setValue(0)
+        self._progress_detail.setText("")
         self._status_msg.setText(t("sync.syncing"))
 
         self._worker = _SyncWorker(self)
         self._worker.set_data(self._sync_manager, mode)
+        self._worker.progress.connect(self._on_sync_progress)
         self._worker.finished.connect(self._on_sync_finished)
         self._worker.error.connect(self._on_sync_error)
         self._worker.start()
@@ -294,6 +335,7 @@ class SyncPage(QWidget):
         self._pull_btn.setEnabled(True)
         self._cancel_btn.hide()
         self._progress.hide()
+        self._progress_panel.hide()
 
         if cancelled:
             self._status_msg.setText(t("common.cancelled"))
@@ -339,6 +381,31 @@ class SyncPage(QWidget):
                 duration=3000,
             )
 
+    def _on_sync_progress(self, progress: SyncProgress) -> None:
+        operation_label = {
+            "push": t("sync.progress_push"),
+            "pull": t("sync.progress_pull"),
+            "check": t("sync.progress_check"),
+        }.get(progress.operation, t("sync.syncing"))
+
+        target = f"{operation_label} {progress.emulator}:{_short_text(progress.game_id)}"
+        self._status_msg.setText(target)
+
+        current = max(0, progress.current)
+        total = max(0, progress.total)
+        if total > 0:
+            pct = min(100, int(current / total * 100))
+            self._progress_bar.setRange(0, 100)
+            self._progress_bar.setValue(pct)
+            size_text = f"{_format_size(current)} / {_format_size(total)}"
+        else:
+            self._progress_bar.setRange(0, 0)
+            size_text = _format_size(current)
+
+        self._progress_detail.setText(
+            f"{_short_text(progress.file_name, 64)} · {size_text}"
+        )
+
     # ------------------------------------------------------------------
     # Conflict resolution
     # ------------------------------------------------------------------
@@ -368,6 +435,7 @@ class SyncPage(QWidget):
         self._push_btn.setEnabled(False)
         self._pull_btn.setEnabled(False)
         self._progress.show()
+        self._progress_panel.hide()
         self._status_msg.setText(t("conflict.resolving"))
 
         self._resolve_worker = _ResolveWorker(self)
@@ -381,6 +449,7 @@ class SyncPage(QWidget):
         self._push_btn.setEnabled(True)
         self._pull_btn.setEnabled(True)
         self._progress.hide()
+        self._progress_panel.hide()
 
         if errors:
             self._log_label.show()
@@ -404,6 +473,7 @@ class SyncPage(QWidget):
         self._pull_btn.setEnabled(True)
         self._cancel_btn.hide()
         self._progress.hide()
+        self._progress_panel.hide()
         self._status_msg.setText("")
         InfoBar.error(
             title=t("common.error"),

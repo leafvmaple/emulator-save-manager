@@ -93,6 +93,9 @@ class GameIconProvider:
         self._cover_resolvers: dict[str, object] = {}
         # Per-emulator save-state thumbnail extractors: emulator → callable(Path) → bytes|None
         self._thumbnail_extractors: dict[str, object] = {}
+        # Covers known to be unavailable in this process; avoids repeated
+        # network probes whenever scan cards are rebuilt.
+        self._cover_miss_cache: set[tuple[str, str]] = set()
 
     # ------------------------------------------------------------------
     # Configuration
@@ -205,6 +208,10 @@ class GameIconProvider:
         it, the resolver is tried first.  Otherwise falls back to the
         built-in PS2-covers logic.
         """
+        miss_key = (emulator or "", game_id)
+        if miss_key in self._cover_miss_cache:
+            return None
+
         # --- Per-emulator resolver ---
         if emulator and emulator in self._cover_resolvers:
             result = self._cover_resolvers[emulator](game_id)
@@ -217,18 +224,26 @@ class GameIconProvider:
                 dest = self._cache_dir / f"{game_id}{ext}"
                 path = self._download_image(url, dest, game_id)
                 if path:
+                    self._cover_miss_cache.discard(miss_key)
                     return path
             # All candidates failed — fall through to built-in logic
             if urls:
+                self._cover_miss_cache.add(miss_key)
                 return None
 
         # --- Built-in PS2 covers fallback ---
         if not _SERIAL_RE.match(game_id):
+            self._cover_miss_cache.add(miss_key)
             return None
 
         url = _COVER_URL.format(serial=game_id)
         dest = self._cache_dir / f"{game_id}.jpg"
-        return self._download_image(url, dest, game_id)
+        path = self._download_image(url, dest, game_id)
+        if path:
+            self._cover_miss_cache.discard(miss_key)
+        else:
+            self._cover_miss_cache.add(miss_key)
+        return path
 
     def _download_image(self, url: str, dest: Path, label: str = "") -> Path | None:
         """Download an image from *url* to *dest*.  Returns *dest* or None."""

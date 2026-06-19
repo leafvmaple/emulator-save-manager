@@ -8,6 +8,7 @@ from typing import Callable
 from loguru import logger
 
 from app.config import Config
+from app.core.rom_identity import RomIdentityResolver
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave
 from app.plugins.plugin_manager import PluginManager
@@ -89,6 +90,7 @@ class Scanner:
                 self._scanned_saves.extend(saves)
             except Exception as e:
                 logger.error("Error scanning saves for {}: {}", emu_info.name, e)
+        self._resolve_display_names(self._scanned_saves)
         logger.info("Total game saves found: {}", len(self._scanned_saves))
         return self.scanned_saves
 
@@ -102,3 +104,27 @@ class Scanner:
             return emulators, []
         saves = self.scan_all_saves(should_cancel)
         return emulators, saves
+
+    def _resolve_display_names(self, saves: list[GameSave]) -> None:
+        """Resolve save display names through plugins and ROM libraries."""
+        by_emulator: dict[str, list[GameSave]] = {}
+        by_platform: dict[str, list[GameSave]] = {}
+        for save in saves:
+            by_emulator.setdefault(save.emulator, []).append(save)
+            if save.platform:
+                by_platform.setdefault(save.platform, []).append(save)
+
+        for emulator, emulator_saves in by_emulator.items():
+            plugin = self._pm.get_plugin(emulator)
+            resolve = getattr(plugin, "resolve_display_names", None)
+            if callable(resolve):
+                resolve(emulator_saves)
+
+        get_game_plugin = getattr(self._pm, "get_game_plugin", None)
+        if callable(get_game_plugin):
+            for platform, platform_saves in by_platform.items():
+                plugin = get_game_plugin(platform)
+                if plugin is not None:
+                    plugin.resolve_display_names(platform_saves)
+
+        RomIdentityResolver(self._cfg).apply_to_saves(saves)

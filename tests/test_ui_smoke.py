@@ -69,6 +69,32 @@ def test_webdav_settings_ui(qtbot, cfg):
     assert page._webdav_card.isHidden()
 
 
+def test_webdav_password_not_saved_until_user_edits(qtbot, cfg, monkeypatch):
+    from app.ui.pages.settings_page import SettingsPage
+    import app.core.credentials as credentials
+
+    calls: list[str] = []
+    monkeypatch.setattr(credentials, "get_webdav_password", lambda: "")
+    monkeypatch.setattr(
+        credentials,
+        "set_webdav_password",
+        lambda password: calls.append(password) or True,
+    )
+    cfg.set("sync_backend", "webdav")
+
+    page = SettingsPage()
+    qtbot.addWidget(page)
+    page.set_config(cfg)
+
+    page._webdav_card._save_password()
+    assert calls == []
+
+    page._webdav_card._pw.setText("new-password")
+    page._webdav_card._mark_password_dirty()
+    page._webdav_card._save_password()
+    assert calls == ["new-password"]
+
+
 def test_auto_backup_wiring(qtbot, cfg):
     from app.ui.main_window import MainWindow
 
@@ -190,6 +216,28 @@ def test_cancel_buttons_present(qtbot, cfg):
         qtbot.addWidget(page)
         assert hasattr(page, "_cancel_btn")
         assert page._cancel_btn.isHidden()
+
+
+def test_sync_page_updates_transfer_progress(qtbot, cfg):
+    from app.core.sync import SyncProgress
+    from app.ui.pages.sync_page import SyncPage
+
+    page = SyncPage()
+    qtbot.addWidget(page)
+
+    page._on_sync_progress(SyncProgress(
+        operation="push",
+        emulator="PCSX2",
+        game_id="SLUS-12345",
+        file_name="backup.zip",
+        current=50,
+        total=100,
+    ))
+
+    assert "PCSX2" in page._status_msg.text()
+    assert "backup.zip" in page._progress_detail.text()
+    assert "50 B / 100 B" in page._progress_detail.text()
+    assert page._progress_bar.value() == 50
 
 
 def test_backup_management_card_and_dialog(qtbot, cfg, tmp_path):

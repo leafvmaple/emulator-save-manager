@@ -210,6 +210,7 @@ class _WebDavCard(CardWidget):
         super().__init__(parent)
         self._config = config
         self._worker: _WebDavTestWorker | None = None
+        self._password_dirty = False
 
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 16, 20, 16)
@@ -266,6 +267,7 @@ class _WebDavCard(CardWidget):
         self._base.editingFinished.connect(
             lambda: self._save("webdav_base_path", self._base.text().strip())
         )
+        self._pw.textEdited.connect(self._mark_password_dirty)
         self._pw.editingFinished.connect(self._save_password)
 
         # Custom cards in a SettingCardGroup don't auto-size from their content,
@@ -284,6 +286,7 @@ class _WebDavCard(CardWidget):
         self._user.setText(self._config.webdav_username)
         self._base.setText(self._config.webdav_base_path)
         from app.core.credentials import get_webdav_password
+        self._password_dirty = False
         self._pw.setText(get_webdav_password())
 
     def _save(self, key: str, value: str) -> None:
@@ -291,8 +294,14 @@ class _WebDavCard(CardWidget):
             self._config.set(key, value)
 
     def _save_password(self) -> None:
+        if not self._password_dirty:
+            return
         from app.core.credentials import set_webdav_password
         set_webdav_password(self._pw.text())
+        self._password_dirty = False
+
+    def _mark_password_dirty(self) -> None:
+        self._password_dirty = True
 
     def _on_test(self) -> None:
         from app.core.sync_backend import WebDavBackend

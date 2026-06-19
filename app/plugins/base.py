@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave
+
+if TYPE_CHECKING:
+    from app.models.rom_entry import RomInfo
 
 
 class EmulatorPlugin(ABC):
@@ -189,3 +193,85 @@ class EmulatorPlugin(ABC):
         (no thumbnail available).
         """
         return None
+
+
+class GamePlugin(ABC):
+    """Base class for platform/ROM metadata plugins.
+
+    ``EmulatorPlugin`` answers "where are this emulator's saves?".  A
+    ``GamePlugin`` answers "what game is this ROM?".  Keeping them separate
+    lets save management stay the main workflow while ROM metadata gradually
+    enriches it.
+    """
+
+    _display_name_table: dict[str, dict[str, str]] | None = None
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Unique plugin name, usually the lower-case platform ID."""
+        ...
+
+    @property
+    @abstractmethod
+    def display_name(self) -> str:
+        """Human-readable platform name."""
+        ...
+
+    @property
+    @abstractmethod
+    def platform(self) -> str:
+        """Canonical platform ID, e.g. ``nds`` or ``snes``."""
+        ...
+
+    @abstractmethod
+    def get_rom_extensions(self) -> list[str]:
+        """ROM file extensions handled by this platform plugin."""
+        ...
+
+    def parse_rom_info(self, rom_path: Path) -> "RomInfo | None":
+        """Extract ROM metadata when possible."""
+        return None
+
+    def extract_game_id(self, rom_path: Path) -> str:
+        """Return a canonical game ID for *rom_path*."""
+        return rom_path.stem
+
+    def resolve_game_name(self, game_id: str) -> str | None:
+        """Resolve a game ID through an optional ``game_names.json`` table."""
+        table = self._load_display_name_table()
+        names = table.get(game_id) or table.get(game_id.upper())
+        if names is None:
+            return None
+        return names.get("zh_CN") or names.get("en_US") or names.get("ja_JP")
+
+    def resolve_display_names(self, saves: list[GameSave]) -> None:
+        """Batch-fill save display names using this platform plugin."""
+        for save in saves:
+            resolved = self.resolve_game_name(save.game_id)
+            if resolved:
+                save.game_name = resolved
+
+    @classmethod
+    def _load_display_name_table(cls) -> dict[str, dict[str, str]]:
+        if cls._display_name_table is not None:
+            return cls._display_name_table
+
+        names_file = cls._plugin_dir() / "game_names.json"
+        if not names_file.exists():
+            cls._display_name_table = {}
+            return cls._display_name_table
+
+        try:
+            with open(names_file, "r", encoding="utf-8") as f:
+                cls._display_name_table = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            logger.debug("Failed to load game-name table {}: {}", names_file, e)
+            cls._display_name_table = {}
+        return cls._display_name_table
+
+    @classmethod
+    def _plugin_dir(cls) -> Path:
+        import inspect
+
+        return Path(inspect.getfile(cls)).parent

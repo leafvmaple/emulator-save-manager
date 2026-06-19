@@ -81,6 +81,35 @@ def test_data_path_attached_to_saves(cfg):
     assert saves[0].data_path == Path("C:/pcsx2data")
 
 
+def test_scan_resolves_display_name_from_rom_library(cfg, tmp_path):
+    from app.data.rom_library import RomLibrary
+    from app.models.rom_entry import RomEntry, RomInfo
+
+    lib = RomLibrary(cfg.data_dir)
+    lib.add(
+        RomEntry(
+            rom_path=str(tmp_path / "Long Rom Name.nds"),
+            platform="nds",
+            game_id="NTR-TEST",
+            rom_info=RomInfo(title_name_zh="真实游戏名"),
+        )
+    )
+    lib.save()
+
+    save = GameSave(
+        emulator="melonDS",
+        game_name="Long Rom Name - Copy",
+        game_id="Long Rom Name - Copy",
+        platform="NDS",
+    )
+    p = _FakePlugin("melonDS", emus=[_emu("melonDS")], saves=[save])
+
+    _, saves = Scanner(_FakePM([p]), cfg).full_scan()
+
+    assert saves[0].game_id == "Long Rom Name - Copy"
+    assert saves[0].game_name == "真实游戏名"
+
+
 def test_cancel_before_detection(cfg):
     p = _FakePlugin("PCSX2", emus=[_emu("PCSX2")], saves=[_save("PCSX2", "G")])
     emus, saves = Scanner(_FakePM([p]), cfg).full_scan(should_cancel=lambda: True)

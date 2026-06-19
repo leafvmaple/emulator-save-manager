@@ -31,6 +31,35 @@ def test_each_plugin_exposes_required_api():
         assert isinstance(plugin.supported_platforms, list)
 
 
+def test_game_plugin_registry_keeps_rom_plugins_separate():
+    from app.plugins.base import GamePlugin
+    from app.plugins.plugin_manager import PluginManager
+
+    class FakeGamePlugin(GamePlugin):
+        @property
+        def name(self):
+            return "fake"
+
+        @property
+        def display_name(self):
+            return "Fake Platform"
+
+        @property
+        def platform(self):
+            return "fake-platform"
+
+        def get_rom_extensions(self):
+            return [".fake"]
+
+    pm = PluginManager()
+    plugin = FakeGamePlugin()
+    pm.register_game_plugin(plugin)
+
+    assert pm.get_game_plugin("fake") is plugin
+    assert pm.get_game_plugin("fake-platform") is plugin
+    assert pm.get_plugin("fake") is None
+
+
 @pytest.mark.parametrize(
     "filename, serial, crc",
     [

@@ -9,6 +9,7 @@ the backend's relative-path operations.
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -20,11 +21,12 @@ from app.config import Config
 from app.core.backup import BackupManager
 from app.core.conflict import (
     ConflictInfo, ConflictResolution,
-    sha256_bytes, zip_content_hash, zip_content_hash_bytes,
+    zip_content_hash, zip_content_hash_bytes,
 )
 from app.core.sync_backend import SyncBackend, make_backend
 
 SYNC_MANIFEST = "sync_manifest.json"
+TRANSFER_CHUNK_SIZE = 1024 * 1024
 
 
 @dataclass
@@ -50,6 +52,21 @@ class SyncResult:
     errors: list[str] = field(default_factory=list)
     crc32_warnings: list[str] = field(default_factory=list)
     """Warnings about CRC32 mismatches (different game disc versions)."""
+
+
+@dataclass(frozen=True)
+class SyncProgress:
+    """Progress update for one sync transfer."""
+
+    operation: str
+    emulator: str
+    game_id: str
+    file_name: str
+    current: int = 0
+    total: int = 0
+
+
+SyncProgressCallback = Callable[[SyncProgress], None]
 
 
 class SyncManager:
@@ -86,7 +103,12 @@ class SyncManager:
     # Push — local backups → remote
     # ------------------------------------------------------------------
 
-    def push(self, emulator: str, game_id: str) -> SyncResult:
+    def push(
+        self,
+        emulator: str,
+        game_id: str,
+        progress_callback: SyncProgressCallback | None = None,
+    ) -> SyncResult:
         """Push the latest local backup for a game to the remote."""
         result = SyncResult()
         if not self._backend.is_configured:  # backend already resolved by caller
@@ -102,7 +124,7 @@ class SyncManager:
         local_zip = latest.backup_path
         local_meta = local_zip.with_suffix(".json")
         try:
-            local_zip_data = local_zip.read_bytes()
+            local_zip_size = local_zip.stat().st_size
         except OSError as e:
             result.errors.append(f"Cannot read backup {local_zip}: {e}")
             return result
@@ -122,10 +144,17 @@ class SyncManager:
 
         # Existing remote version → skip if identical, else a conflict.
         if self._backend.exists(rel_zip):
-            remote_zip_data = self._backend.read_bytes(rel_zip)
             remote_meta_data = self._backend.read_bytes(rel_meta)
             local_h = self._content_hash(local_zip)
-            remote_h = self._content_hash_remote(remote_zip_data, remote_meta_data)
+            remote_h = self._meta_field(remote_meta_data, "content_hash")
+            if not remote_h:
+                remote_zip_data = self._backend.read_bytes(
+                    rel_zip,
+                    progress_callback=self._transfer_progress(
+                        progress_callback, "check", emulator, game_id, local_zip.name,
+                    ),
+                )
+                remote_h = self._content_hash_remote(remote_zip_data, remote_meta_data)
             if local_h and local_h == remote_h:
                 logger.info("Push skipped — already in sync: {}:{}", emulator, game_id)
                 return result
@@ -135,12 +164,22 @@ class SyncManager:
             return result
 
         try:
-            self._backend.write_bytes(rel_zip, local_zip_data)
+            self._emit_progress(
+                progress_callback, "push", emulator, game_id, local_zip.name, 0,
+                local_zip_size,
+            )
+            self._backend.write_file(
+                rel_zip,
+                local_zip,
+                progress_callback=self._transfer_progress(
+                    progress_callback, "push", emulator, game_id, local_zip.name,
+                ),
+            )
             if local_meta_data is not None:
                 self._backend.write_bytes(rel_meta, local_meta_data)
             result.pushed = 1
             logger.info("Pushed backup {}:{} → {}", emulator, game_id, rel_zip)
-            self._update_manifest(emulator, game_id, local_zip, local_zip_data, local_meta_data)
+            self._update_manifest(emulator, game_id, local_zip, local_meta_data)
         except Exception as e:  # noqa: BLE001
             msg = f"Push failed for {emulator}:{game_id}: {e}"
             logger.error(msg)
@@ -152,7 +191,12 @@ class SyncManager:
     # Pull — remote → local backups
     # ------------------------------------------------------------------
 
-    def pull(self, emulator: str, game_id: str) -> SyncResult:
+    def pull(
+        self,
+        emulator: str,
+        game_id: str,
+        progress_callback: SyncProgressCallback | None = None,
+    ) -> SyncResult:
         """Pull the latest remote backup for a game to local storage."""
         result = SyncResult()
         if not self._backend.is_configured:  # backend already resolved by caller
@@ -171,29 +215,34 @@ class SyncManager:
         rel_zip = f"{rel_dir}/{latest_name}"
         rel_meta = f"{rel_dir}/{latest_name[:-4]}.json"
 
-        remote_zip_data = self._backend.read_bytes(rel_zip)
-        if remote_zip_data is None:
-            return result
         remote_meta_data = self._backend.read_bytes(rel_meta)
 
         # --- CRC32 version check ---
+        local_backups = self._bm.list_backups(emulator, game_id)
         remote_crc = self._meta_field(remote_meta_data, "crc32")
-        if remote_crc:
-            local_backups_tmp = self._bm.list_backups(emulator, game_id)
-            if local_backups_tmp:
-                local_meta = local_backups_tmp[0].backup_path.with_suffix(".json")
-                local_crc = self._read_meta_field(local_meta, "crc32")
-                if local_crc and local_crc.lower() != remote_crc.lower():
-                    result.crc32_warnings.append(
-                        f"{emulator}:{game_id} — local CRC {local_crc}, remote CRC {remote_crc}"
-                    )
+        if remote_crc and local_backups:
+            local_meta = local_backups[0].backup_path.with_suffix(".json")
+            local_crc = self._read_meta_field(local_meta, "crc32")
+            if local_crc and local_crc.lower() != remote_crc.lower():
+                result.crc32_warnings.append(
+                    f"{emulator}:{game_id} — local CRC {local_crc}, remote CRC {remote_crc}"
+                )
 
         # Compare with local
-        local_backups = self._bm.list_backups(emulator, game_id)
         if local_backups:
             latest_local = local_backups[0]
             local_h = self._content_hash(latest_local.backup_path)
-            remote_h = self._content_hash_remote(remote_zip_data, remote_meta_data)
+            remote_h = self._meta_field(remote_meta_data, "content_hash")
+            if not remote_h:
+                remote_zip_data = self._backend.read_bytes(
+                    rel_zip,
+                    progress_callback=self._transfer_progress(
+                        progress_callback, "pull", emulator, game_id, latest_name,
+                    ),
+                )
+                if remote_zip_data is None:
+                    return result
+                remote_h = self._content_hash_remote(remote_zip_data, remote_meta_data)
             if local_h and local_h == remote_h:
                 logger.info("Pull skipped — already in sync: {}:{}", emulator, game_id)
                 return result
@@ -207,7 +256,15 @@ class SyncManager:
         dest_dir = self._bm.backup_root / emulator / game_id
         dest_dir.mkdir(parents=True, exist_ok=True)
         try:
-            (dest_dir / latest_name).write_bytes(remote_zip_data)
+            dest_zip = dest_dir / latest_name
+            if not self._backend.read_file(
+                rel_zip,
+                dest_zip,
+                progress_callback=self._transfer_progress(
+                    progress_callback, "pull", emulator, game_id, latest_name,
+                ),
+            ):
+                return result
             if remote_meta_data is not None:
                 (dest_dir / f"{latest_name[:-4]}.json").write_bytes(remote_meta_data)
             result.pulled = 1
@@ -223,7 +280,11 @@ class SyncManager:
     # Full sync
     # ------------------------------------------------------------------
 
-    def push_all(self, should_cancel: Callable[[], bool] | None = None) -> SyncResult:
+    def push_all(
+        self,
+        should_cancel: Callable[[], bool] | None = None,
+        progress_callback: SyncProgressCallback | None = None,
+    ) -> SyncResult:
         """Push every local backup to the remote."""
         result = SyncResult()
         if not self.is_configured:
@@ -235,7 +296,10 @@ class SyncManager:
                 logger.info("Push cancelled")
                 break
             emulator, game_id = key.split(":", 1)
-            self._merge(result, self.push(emulator, game_id))
+            self._merge(
+                result,
+                self.push(emulator, game_id, progress_callback=progress_callback),
+            )
 
         logger.info(
             "Push complete — pushed: {}, conflicts: {}, errors: {}",
@@ -243,7 +307,11 @@ class SyncManager:
         )
         return result
 
-    def pull_all(self, should_cancel: Callable[[], bool] | None = None) -> SyncResult:
+    def pull_all(
+        self,
+        should_cancel: Callable[[], bool] | None = None,
+        progress_callback: SyncProgressCallback | None = None,
+    ) -> SyncResult:
         """Pull every remote backup to local storage."""
         result = SyncResult()
         if not self.is_configured:
@@ -260,7 +328,10 @@ class SyncManager:
                 rel_dir = f"{emulator}/{game_id}"
                 if not any(n.endswith(".zip") for n in self._backend.list_dir(rel_dir)):
                     continue
-                self._merge(result, self.pull(emulator, game_id))
+                self._merge(
+                    result,
+                    self.pull(emulator, game_id, progress_callback=progress_callback),
+                )
 
         logger.info(
             "Pull complete — pulled: {}, conflicts: {}, errors: {}",
@@ -268,15 +339,19 @@ class SyncManager:
         )
         return result
 
-    def sync_all(self, should_cancel: Callable[[], bool] | None = None) -> SyncResult:
+    def sync_all(
+        self,
+        should_cancel: Callable[[], bool] | None = None,
+        progress_callback: SyncProgressCallback | None = None,
+    ) -> SyncResult:
         """Perform a full bidirectional sync for all known backups."""
         result = SyncResult()
         if not self.is_configured:
             result.errors.append("Sync not configured")
             return result
 
-        push_result = self.push_all(should_cancel)
-        pull_result = self.pull_all(should_cancel)
+        push_result = self.push_all(should_cancel, progress_callback=progress_callback)
+        pull_result = self.pull_all(should_cancel, progress_callback=progress_callback)
         result.pushed = push_result.pushed
         result.pulled = pull_result.pulled
         result.conflicts = push_result.conflicts + pull_result.conflicts
@@ -312,7 +387,7 @@ class SyncManager:
         local_meta = local_zip.with_suffix(".json")
         try:
             if resolution == ConflictResolution.USE_LOCAL:
-                self._backend.write_bytes(rel_zip, local_zip.read_bytes())
+                self._backend.write_file(rel_zip, local_zip)
                 if local_meta.exists():
                     self._backend.write_bytes(rel_meta, local_meta.read_bytes())
                 logger.info("Conflict resolved: USE_LOCAL for {}", conflict.game_id)
@@ -363,7 +438,7 @@ class SyncManager:
 
     def _update_manifest(
         self, emulator: str, game_id: str, local_zip: Path,
-        zip_data: bytes, meta_data: bytes | None,
+        meta_data: bytes | None,
     ) -> None:
         manifest = self.get_manifest()
         manifest[f"{emulator}:{game_id}"] = {
@@ -371,7 +446,7 @@ class SyncManager:
             "emulator": emulator,
             "last_sync_time": datetime.now().isoformat(),
             "source_machine": self._cfg.machine_id,
-            "file_hash": sha256_bytes(zip_data),
+            "file_hash": self._file_sha256(local_zip),
             "relative_path": f"{emulator}/{game_id}/{local_zip.name}",
             "crc32": self._meta_field(meta_data, "crc32"),
         }
@@ -438,6 +513,52 @@ class SyncManager:
         if cached:
             return cached
         return zip_content_hash_bytes(zip_data) if zip_data else ""
+
+    @staticmethod
+    def _emit_progress(
+        callback: SyncProgressCallback | None,
+        operation: str,
+        emulator: str,
+        game_id: str,
+        file_name: str,
+        current: int,
+        total: int | None,
+    ) -> None:
+        if callback:
+            callback(SyncProgress(
+                operation=operation,
+                emulator=emulator,
+                game_id=game_id,
+                file_name=file_name,
+                current=current,
+                total=total or 0,
+            ))
+
+    def _transfer_progress(
+        self,
+        callback: SyncProgressCallback | None,
+        operation: str,
+        emulator: str,
+        game_id: str,
+        file_name: str,
+    ) -> Callable[[int, int | None], None] | None:
+        if callback is None:
+            return None
+
+        def _callback(current: int, total: int | None) -> None:
+            self._emit_progress(
+                callback, operation, emulator, game_id, file_name, current, total,
+            )
+
+        return _callback
+
+    @staticmethod
+    def _file_sha256(path: Path) -> str:
+        h = hashlib.sha256()
+        with path.open("rb") as f:
+            while chunk := f.read(TRANSFER_CHUNK_SIZE):
+                h.update(chunk)
+        return h.hexdigest()
 
     @staticmethod
     def _meta_field(data: bytes | None, field_name: str) -> str:

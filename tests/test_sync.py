@@ -88,3 +88,19 @@ def test_sync_all_composes_push_and_pull(tmp_path, make_game_save, machine_facto
     res = smA.sync_all()
     assert res.pushed == 1
     assert not res.errors
+
+
+def test_push_all_reports_transfer_progress(tmp_path, make_game_save, machine_factory):
+    sync = tmp_path / "sync"
+    sync.mkdir()
+    _cfgA, bmA, smA = machine_factory("A", sync)
+    bmA.create_backup([make_game_save(tmp_path / "sa", files={"x.bin": b"DATA"})])
+
+    events = []
+    res = smA.push_all(progress_callback=events.append)
+
+    assert res.pushed == 1
+    assert events
+    assert events[-1].operation == "push"
+    assert events[-1].current == events[-1].total
+    assert events[-1].total > 0
