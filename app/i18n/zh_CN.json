@@ -153,7 +153,7 @@
     },
     "rom": {
         "title": "ROM 库",
-        "description": "扫描 ROM 目录，检测重复文件并关联游戏存档（只读，不会移动或修改任何文件）",
+        "description": "扫描 ROM 目录，DAT 校验、查重、识别汉化与母本；支持规范化重命名与整理入库（存档与备份链自动联动）",
         "dirs_title": "ROM 目录",
         "add_dir": "添加目录",
         "no_dirs": "尚未配置 ROM 目录，点击「添加目录」开始",
@@ -196,7 +196,17 @@
         "sort_btn": "整理入库",
         "sort_pick_dir": "选择整理目标目录",
         "sort_title": "整理入库预览",
-        "sort_desc": "已识别的 ROM 将改名并移动到库目录（按平台分组），未识别的留在原地。同目录的存档与 .bak 原件随行，备份链联动迁移，执行前自动创建安全备份。"
+        "sort_desc": "已识别的 ROM 将改名并移动到库目录（按平台分组），未识别的留在原地。同目录的存档与 .bak 原件随行，备份链联动迁移，执行前自动创建安全备份。",
+        "dat_title": "DAT 数据库",
+        "dat_import": "导入 DAT…",
+        "dat_pick": "选择 No-Intro DAT 文件（.dat 或下载的 .zip）",
+        "dat_none": "尚未安装 DAT — 从 datomat.no-intro.org 下载后点击导入，扫描即可校验官方游戏",
+        "dat_summary": "{count} 个 DAT · {games} 个条目 · {platforms}",
+        "dat_installed_line": "{platform}: {name}（{entries} 条目）",
+        "dat_replaced": " · 已替换旧版 {old}",
+        "dat_err_unreadable": "{name}: 无法解析，不是有效的 DAT 文件",
+        "dat_err_too_small": "{name}: 条目过少，疑似选错了导出类型（如 Source Code 分类）",
+        "dat_err_no_dat_in_zip": "{name}: 压缩包里没有 .dat 文件"
     },
     "conflict": {
         "title": "存档冲突",

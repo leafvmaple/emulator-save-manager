@@ -153,7 +153,7 @@
     },
     "rom": {
         "title": "ROM Library",
-        "description": "Scan ROM directories, detect duplicate dumps and link them to game saves (read-only — nothing is moved or modified)",
+        "description": "Scan ROM folders with DAT verification, dupe detection and translation identification; normalize names or sort into your library with saves and backups migrating along",
         "dirs_title": "ROM Directories",
         "add_dir": "Add Directory",
         "no_dirs": "No ROM directories configured yet — click “Add Directory” to begin",
@@ -196,7 +196,17 @@
         "sort_btn": "Sort to Library",
         "sort_pick_dir": "Choose library folder",
         "sort_title": "Sort Preview",
-        "sort_desc": "Identified ROMs are renamed and moved into the library (grouped by platform); unidentified files stay behind. Adjacent saves and .bak originals travel along, backup chains migrate, and a safety backup is created first."
+        "sort_desc": "Identified ROMs are renamed and moved into the library (grouped by platform); unidentified files stay behind. Adjacent saves and .bak originals travel along, backup chains migrate, and a safety backup is created first.",
+        "dat_title": "DAT Database",
+        "dat_import": "Import DAT…",
+        "dat_pick": "Pick No-Intro DAT files (.dat or the downloaded .zip)",
+        "dat_none": "No DATs installed — download from datomat.no-intro.org, import here, then scan to verify official dumps",
+        "dat_summary": "{count} DATs · {games} entries · {platforms}",
+        "dat_installed_line": "{platform}: {name} ({entries} entries)",
+        "dat_replaced": " · replaced {old}",
+        "dat_err_unreadable": "{name}: not a valid DAT file",
+        "dat_err_too_small": "{name}: too few entries — wrong export type? (e.g. the Source Code category)",
+        "dat_err_no_dat_in_zip": "{name}: no .dat inside the archive"
     },
     "conflict": {
         "title": "Save Conflict",

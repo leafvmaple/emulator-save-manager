@@ -68,6 +68,13 @@ DAT hash — are legitimate scan-time writes (original kept as a sibling
   each configured `archive_passwords` entry (7z and RAR; listing only,
   nothing is extracted) — field-verified against a scene NDS set:
   998/1000 dumps identified once the site password was configured.
+- **DAT installer** *(Status: shipped)*: BIOS-install style flow on the
+  ROM page — a "DAT Database" card shows what's installed (files /
+  entries / platforms) and "Import DAT…" accepts `.dat` files or the
+  `.zip` exactly as downloaded from Dat-o-Matic, validates before
+  installing (rejects non-XML and suspiciously tiny exports like the
+  "Source Code" category), and retires older exports of the same DAT
+  family automatically.
 - **Custom game DB** *(Status: shipped)*: `games_custom.json` in the data
   dir keys identities by content CRC for ROMs no DAT will ever match
   (translations, hacks, unlicensed originals); the "Draft Unidentified"

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtCore import Qt, Signal, QThread, QTimer
 from PySide6.QtWidgets import (
     QFileDialog, QHBoxLayout, QHeaderView, QTableWidgetItem,
     QVBoxLayout, QWidget,
@@ -181,6 +181,9 @@ class RomPage(QWidget):
     def set_config(self, config: Config) -> None:
         self._config = config
         self._refresh_dirs()
+        # Parse-and-summarize off the startup path; local parses are
+        # cached process-wide after the first pass.
+        QTimer.singleShot(50, self._refresh_dat_summary)
 
     def set_backup_manager(self, backup_mgr: BackupManager) -> None:
         self._backup_mgr = backup_mgr
@@ -231,6 +234,33 @@ class RomPage(QWidget):
         self._dirs_lay.setSpacing(theme.GAP_XS)
         card_lay.addLayout(self._dirs_lay)
         layout.addWidget(self._dirs_card)
+
+        # DAT database card — install status + BIOS-style import flow
+        self._dat_card = CardWidget(self)
+        dat_lay = QVBoxLayout(self._dat_card)
+        dat_lay.setContentsMargins(20, 16, 20, 16)
+        dat_lay.setSpacing(theme.GAP_SM)
+
+        dat_head = QHBoxLayout()
+        dat_head.setSpacing(theme.GAP_SM)
+        dat_ic = IconWidget(FIF.DICTIONARY, self._dat_card)
+        dat_ic.setFixedSize(18, 18)
+        dat_head.addWidget(dat_ic, 0, Qt.AlignmentFlag.AlignVCenter)
+        dat_head.addWidget(StrongBodyLabel(t("rom.dat_title"), self._dat_card),
+                           0, Qt.AlignmentFlag.AlignVCenter)
+        dat_head.addStretch()
+        self._dat_import_btn = PushButton(
+            FIF.DOWNLOAD, t("rom.dat_import"), self._dat_card)
+        self._dat_import_btn.clicked.connect(self._on_import_dat)
+        dat_head.addWidget(self._dat_import_btn, 0,
+                           Qt.AlignmentFlag.AlignVCenter)
+        dat_lay.addLayout(dat_head)
+
+        self._dat_summary = CaptionLabel(t("rom.dat_none"), self._dat_card)
+        self._dat_summary.setStyleSheet(f"color:{theme.text_muted()};")
+        self._dat_summary.setWordWrap(True)
+        dat_lay.addWidget(self._dat_summary)
+        layout.addWidget(self._dat_card)
 
         # Action bar
         av = Qt.AlignmentFlag.AlignVCenter
@@ -343,6 +373,67 @@ class RomPage(QWidget):
             remove.clicked.connect(lambda _=False, p=d: self._on_remove_dir(p))
             row.addWidget(remove, 0)
             self._dirs_lay.addLayout(row)
+
+    # ------------------------------------------------------------------
+    # DAT database
+    # ------------------------------------------------------------------
+
+    def _refresh_dat_summary(self) -> None:
+        if self._config is None:
+            return
+        from app.core.dat_index import load_dat_index
+        index = load_dat_index(self._config.dat_dir)
+        if not index.sources:
+            self._dat_summary.setText(t("rom.dat_none"))
+            return
+        platforms = sorted(
+            {g.platform for g in index.by_crc.values() if g.platform})
+        self._dat_summary.setText(t(
+            "rom.dat_summary",
+            count=str(len(index.sources)),
+            games=f"{index.game_count:,}",
+            platforms=" / ".join(platforms) or "?",
+        ))
+
+    def _on_import_dat(self) -> None:
+        """BIOS-install style flow: pick DATs (or their zips), validate,
+        place into the DAT directory, retire older exports."""
+        if self._config is None:
+            return
+        files, _ = QFileDialog.getOpenFileNames(
+            self, t("rom.dat_pick"), "",
+            "No-Intro DAT (*.dat *.zip);;All files (*)")
+        if not files:
+            return
+        from app.core.dat_installer import install_dats
+        report = install_dats([Path(f) for f in files],
+                              self._config.dat_dir)
+
+        lines = []
+        for d in report.installed:
+            line = t("rom.dat_installed_line",
+                     platform=d.platform or "?",
+                     entries=f"{d.entries:,}", name=d.name)
+            if d.replaced:
+                line += t("rom.dat_replaced", old=", ".join(d.replaced))
+            lines.append(line)
+        for name, kind in report.errors:
+            lines.append(t(f"rom.dat_err_{kind}", name=name))
+
+        content = "\n".join(lines)
+        if report.installed and not report.errors:
+            InfoBar.success(title=t("rom.dat_import"), content=content,
+                            parent=self, position=InfoBarPosition.TOP,
+                            duration=8000)
+        elif report.installed:
+            InfoBar.warning(title=t("rom.dat_import"), content=content,
+                            parent=self, position=InfoBarPosition.TOP,
+                            duration=10000)
+        else:
+            InfoBar.error(title=t("rom.dat_import"), content=content,
+                          parent=self, position=InfoBarPosition.TOP,
+                          duration=10000)
+        self._refresh_dat_summary()
 
     def _on_add_dir(self) -> None:
         if self._config is None:

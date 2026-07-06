@@ -455,6 +455,37 @@ def test_rom_page_rename_button_needs_scan_and_backup_manager(qtbot, cfg):
     assert not page._rename_btn.isEnabled()  # enabled only after a scan
 
 
+def test_rom_page_dat_card_reflects_installs(qtbot, cfg, tmp_path):
+    """The DAT card shows install state and updates after an import."""
+    from app.core.dat_installer import install_dats
+    from app.i18n import t
+    from app.ui.pages.rom_page import RomPage
+
+    page = RomPage()
+    qtbot.addWidget(page)
+    page.set_config(cfg)
+
+    page._refresh_dat_summary()
+    assert page._dat_summary.text() == t("rom.dat_none")
+
+    games = "".join(
+        f'<game name="G{i}"><rom name="g{i}.nes" crc="{i:08X}"/></game>'
+        for i in range(1, 61))
+    src = tmp_path / "Nintendo - Nintendo Entertainment System (Headered) (20260101-000000).dat"
+    src.write_text(
+        '<?xml version="1.0"?><datafile><header><name>'
+        "Nintendo - Nintendo Entertainment System (Headered)"
+        f"</name></header>{games}</datafile>",
+        encoding="utf-8",
+    )
+    report = install_dats([src], cfg.dat_dir)
+    assert report.ok
+
+    page._refresh_dat_summary()
+    assert "60" in page._dat_summary.text()
+    assert "NES" in page._dat_summary.text()
+
+
 def test_rom_page_scan_without_dirs_warns(qtbot, cfg):
     from app.ui.pages.rom_page import RomPage
 

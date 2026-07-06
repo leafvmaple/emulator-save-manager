@@ -153,7 +153,7 @@
     },
     "rom": {
         "title": "ROMライブラリ",
-        "description": "ROMフォルダをスキャンし、重複ファイルの検出とセーブデータの関連付けを行います（読み取り専用・ファイルは変更されません）",
+        "description": "ROMフォルダをスキャンしてDAT検証・重複検出・翻訳版識別。正規化リネームとライブラリ整理に対応（セーブとバックアップも自動追随）",
         "dirs_title": "ROMフォルダ",
         "add_dir": "フォルダを追加",
         "no_dirs": "ROMフォルダが未設定です。「フォルダを追加」から始めてください",
@@ -196,7 +196,17 @@
         "sort_btn": "ライブラリへ整理",
         "sort_pick_dir": "整理先フォルダを選択",
         "sort_title": "整理のプレビュー",
-        "sort_desc": "識別済みのROMは正規名に変更してライブラリへ移動します（プラットフォーム別）。未識別のファイルはそのまま残ります。同じフォルダのセーブと .bak も一緒に移動し、バックアップ履歴も移行、実行前に安全バックアップを作成します。"
+        "sort_desc": "識別済みのROMは正規名に変更してライブラリへ移動します（プラットフォーム別）。未識別のファイルはそのまま残ります。同じフォルダのセーブと .bak も一緒に移動し、バックアップ履歴も移行、実行前に安全バックアップを作成します。",
+        "dat_title": "DATデータベース",
+        "dat_import": "DATをインポート…",
+        "dat_pick": "No-Intro DATファイルを選択（.dat またはダウンロードした .zip）",
+        "dat_none": "DAT未インストール — datomat.no-intro.org からダウンロードしてインポート後、スキャンで公式ダンプを検証できます",
+        "dat_summary": "DAT {count} 件 · {games} エントリ · {platforms}",
+        "dat_installed_line": "{platform}: {name}（{entries} エントリ）",
+        "dat_replaced": " · 旧版 {old} を置換",
+        "dat_err_unreadable": "{name}: 有効なDATファイルではありません",
+        "dat_err_too_small": "{name}: エントリが少なすぎます — エクスポート種別の誤り（Source Code など）の可能性",
+        "dat_err_no_dat_in_zip": "{name}: アーカイブ内に .dat がありません"
     },
     "conflict": {
         "title": "セーブ競合",
