@@ -92,22 +92,29 @@ class _RenameWorker(QThread):
 
 
 class _RenameDialog(MessageBoxBase):
-    """Dry-run preview — pick which normalizations to apply."""
+    """Dry-run preview — pick which normalizations / moves to apply."""
 
-    def __init__(self, plan: RenamePlan, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        plan: RenamePlan,
+        parent: QWidget | None = None,
+        title: str = "",
+        desc: str = "",
+    ) -> None:
         super().__init__(parent)
         self._checks: list[tuple[GameRename, CheckBox]] = []
 
-        self.titleLabel = SubtitleLabel(t("rom.rename_title"), self)
+        self.titleLabel = SubtitleLabel(title or t("rom.rename_title"), self)
         self.viewLayout.addWidget(self.titleLabel)
-        self.viewLayout.addWidget(BodyLabel(t("rom.rename_desc"), self))
+        self.viewLayout.addWidget(
+            BodyLabel(desc or t("rom.rename_desc"), self))
 
         inner = QWidget(self)
         box = QVBoxLayout(inner)
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(6)
         for item in plan.items:
-            cb = CheckBox(f"{item.rom.path.name}  →  {item.new_name}", inner)
+            cb = CheckBox(self._item_label(item), inner)
             cb.setChecked(True)
             self._checks.append((item, cb))
             box.addWidget(cb)
@@ -140,6 +147,13 @@ class _RenameDialog(MessageBoxBase):
         self.yesButton.setText(t("rom.rename_execute"))
         self.cancelButton.setText(t("common.cancel"))
         self.widget.setMinimumWidth(560)
+
+    @staticmethod
+    def _item_label(item: GameRename) -> str:
+        if item.target_path is not None:
+            dest = f"{item.new_rom_path.parent.name}/{item.new_name}"
+            return f"{item.rom.path.name}  →  {dest}"
+        return f"{item.rom.path.name}  →  {item.new_name}"
 
     @property
     def selected_items(self) -> list[GameRename]:
@@ -236,6 +250,11 @@ class RomPage(QWidget):
         self._rename_btn.clicked.connect(self._on_normalize)
         self._rename_btn.setEnabled(False)  # needs a completed scan
         action_bar.addWidget(self._rename_btn, 0, av)
+
+        self._sort_btn = PushButton(FIF.LIBRARY, t("rom.sort_btn"), self)
+        self._sort_btn.clicked.connect(self._on_sort)
+        self._sort_btn.setEnabled(False)  # needs a completed scan
+        action_bar.addWidget(self._sort_btn, 0, av)
 
         self._cancel_btn = PushButton(FIF.CLOSE, t("common.cancel"), self)
         self._cancel_btn.clicked.connect(self._on_cancel)
@@ -432,6 +451,9 @@ class RomPage(QWidget):
         self._status_msg.setText(summary)
         self._skeleton_btn.setEnabled(True)
         self._rename_btn.setEnabled(self._backup_mgr is not None)
+        self._sort_btn.setEnabled(self._backup_mgr is not None)
+        if self._config is not None and self._config.library_dir:
+            self._sort_btn.setToolTip(self._config.library_dir)
         self._populate_table(report)
         self._populate_orphans(report)
 
@@ -453,20 +475,44 @@ class RomPage(QWidget):
 
     def _on_normalize(self) -> None:
         """Preview and apply canonical renames with save/backup migration."""
+        self._run_rename_flow(library_dir=None)
+
+    def _on_sort(self) -> None:
+        """Move every identified ROM into the library dir, renamed."""
+        if self._config is None:
+            return
+        lib_dir = self._config.library_dir
+        if not lib_dir:
+            lib_dir = QFileDialog.getExistingDirectory(
+                self, t("rom.sort_pick_dir"))
+            if not lib_dir:
+                return
+            self._config.set("library_dir", lib_dir)
+            self._sort_btn.setToolTip(lib_dir)
+        self._run_rename_flow(library_dir=Path(lib_dir))
+
+    def _run_rename_flow(self, library_dir: Path | None) -> None:
         if self._report is None or self._config is None \
                 or self._backup_mgr is None:
             return
+        sort_mode = library_dir is not None
+        button_label = t("rom.sort_btn") if sort_mode else t("rom.rename_btn")
         engine = RenameEngine(self._config, self._backup_mgr)
-        plan = engine.plan_renames(self._report.roms, self._saves)
+        plan = engine.plan_renames(self._report.roms, self._saves,
+                                   library_dir=library_dir)
         if not plan.items and not plan.skipped:
             InfoBar.info(
-                title=t("rom.rename_btn"),
+                title=button_label,
                 content=t("rom.rename_none"),
                 parent=self, position=InfoBarPosition.TOP, duration=4000,
             )
             return
 
-        dlg = _RenameDialog(plan, self.window())
+        dlg = _RenameDialog(
+            plan, self.window(),
+            title=t("rom.sort_title") if sort_mode else t("rom.rename_title"),
+            desc=t("rom.sort_desc") if sort_mode else t("rom.rename_desc"),
+        )
         if not dlg.exec():
             return
         selected = dlg.selected_items
@@ -474,6 +520,7 @@ class RomPage(QWidget):
             return
 
         self._rename_btn.setEnabled(False)
+        self._sort_btn.setEnabled(False)
         self._scan_btn.setEnabled(False)
         self._progress.show()
         self._status_msg.setText(t("rom.rename_running"))

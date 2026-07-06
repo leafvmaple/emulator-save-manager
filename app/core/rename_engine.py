@@ -24,8 +24,10 @@ never end up split.
 
 from __future__ import annotations
 
+import errno
 import os
 import re
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -34,7 +36,9 @@ from loguru import logger
 from app.config import Config
 from app.core.backup import BackupManager
 from app.core.custom_db import CustomGame, load_custom_db
-from app.core.rom_library import FILENAME_KEYED_EMULATORS, RomFile
+from app.core.rom_library import (
+    ARCHIVE_EXTENSIONS, FILENAME_KEYED_EMULATORS, ROM_EXTENSIONS, RomFile,
+)
 from app.models.game_save import GameSave
 
 _ILLEGAL_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
@@ -83,13 +87,20 @@ class SaveRename:
 
 @dataclass
 class GameRename:
-    """Planned rename of one ROM plus everything keyed to its stem."""
+    """Planned rename (or sort-move) of one ROM plus everything keyed
+    to its stem."""
 
     rom: RomFile
     new_stem: str
     reason: str
+    target_path: Path | None = None
+    """Explicit destination in sort-to-library mode; ``None`` renames
+    in place."""
     saves: list[GameSave] = field(default_factory=list)
     save_renames: list[SaveRename] = field(default_factory=list)
+    companion_renames: list[SaveRename] = field(default_factory=list)
+    """Same-directory files sharing the stem (``.bak`` originals, …)
+    that must follow a sort-move so nothing gets orphaned."""
     backup_emulators: list[str] = field(default_factory=list)
     """Emulators whose backup chain will be migrated."""
     skip_reason: str = ""
@@ -104,7 +115,17 @@ class GameRename:
 
     @property
     def new_rom_path(self) -> Path:
+        if self.target_path is not None:
+            return self.target_path
         return self.rom.path.with_name(self.new_name)
+
+    @property
+    def is_move(self) -> bool:
+        return (
+            self.target_path is not None
+            and os.path.normcase(str(self.target_path.parent))
+            != os.path.normcase(str(self.rom.path.parent))
+        )
 
 
 @dataclass
@@ -138,8 +159,16 @@ class RenameEngine:
         self,
         roms: list[RomFile],
         saves: list[GameSave],
+        library_dir: Path | None = None,
     ) -> RenamePlan:
-        """Build the dry-run plan for every identifiable, mis-named ROM."""
+        """Build the dry-run plan for every identifiable ROM.
+
+        In-place mode (``library_dir=None``) plans canonical renames for
+        mis-named ROMs.  Sort mode additionally *moves* every identified
+        ROM — even already-canonical ones — into
+        ``library_dir/<platform>/``, leaving unidentified files behind
+        for later curation.
+        """
         custom = load_custom_db(self._cfg.data_dir / "games_custom.json")
 
         saves_by_stem: dict[str, list[GameSave]] = {}
@@ -150,13 +179,24 @@ class RenameEngine:
         plan = RenamePlan()
         claimed_targets: set[str] = set()
         claimed_stems: set[str] = set()
+        listing_cache: dict[Path, list[Path]] = {}
 
         for rom in roms:
             new_stem, reason = target_stem(rom, custom)
-            if not new_stem or new_stem == rom.path.stem:
+            if not new_stem:
                 continue
+            if library_dir is None and new_stem == rom.path.stem:
+                continue  # in-place mode: already canonical
 
             item = GameRename(rom=rom, new_stem=new_stem, reason=reason)
+            if library_dir is not None:
+                dest_dir = library_dir / sanitize_filename(
+                    rom.platform or "Unknown")
+                item.target_path = dest_dir / item.new_name
+                if os.path.normcase(str(item.target_path)) \
+                        == os.path.normcase(str(rom.path)):
+                    continue  # already sorted and canonical
+
             old_stem_key = rom.path.stem.lower()
             target_key = os.path.normcase(str(item.new_rom_path))
 
@@ -174,13 +214,17 @@ class RenameEngine:
             ):
                 item.skip_reason = "target file already exists"
             else:
-                item.skip_reason = self._plan_save_renames(item)
+                item.skip_reason = (
+                    self._plan_save_renames(item)
+                    or self._plan_companions(item, listing_cache)
+                )
 
             if item.skip_reason:
                 plan.skipped.append(item)
                 continue
 
-            item.backup_emulators = self._chains_to_migrate(item)
+            if item.new_stem != item.old_stem:
+                item.backup_emulators = self._chains_to_migrate(item)
             claimed_targets.add(target_key)
             claimed_stems.add(old_stem_key)
             plan.items.append(item)
@@ -188,8 +232,14 @@ class RenameEngine:
         return plan
 
     def _plan_save_renames(self, item: GameRename) -> str:
-        """Fill ``item.save_renames``; return a skip reason on conflict."""
+        """Fill ``item.save_renames``; return a skip reason on conflict.
+
+        A save living *next to the ROM* (melonDS-style adjacency) follows
+        a sort-move into the library; saves in emulator data dirs are
+        renamed where they are.
+        """
         old_stem = item.old_stem
+        rom_dir_key = os.path.normcase(str(item.rom.path.parent))
         for save in item.saves:
             for sf in save.save_files:
                 name = sf.path.name
@@ -199,11 +249,57 @@ class RenameEngine:
                         sf.path, old_stem)
                     continue
                 new_name = item.new_stem + name[len(old_stem):]
-                new_path = sf.path.with_name(new_name)
+                if (
+                    item.is_move
+                    and os.path.normcase(str(sf.path.parent)) == rom_dir_key
+                ):
+                    new_path = item.new_rom_path.parent / new_name
+                else:
+                    new_path = sf.path.with_name(new_name)
+                if new_path == sf.path:
+                    continue
                 if new_path.exists() and os.path.normcase(
                         str(new_path)) != os.path.normcase(str(sf.path)):
                     return f"save target already exists: {new_path.name}"
                 item.save_renames.append(SaveRename(sf.path, new_path))
+        return ""
+
+    def _plan_companions(
+        self,
+        item: GameRename,
+        listing_cache: dict[Path, list[Path]],
+    ) -> str:
+        """Plan same-directory stem companions for a sort-move.
+
+        Files like ``<stem>.zip.bak`` (pre-repair originals) share the
+        ROM's fate; other ROM candidates with the same stem keep their
+        own plan item and are not touched here.
+        """
+        if not item.is_move:
+            return ""
+        parent = item.rom.path.parent
+        if parent not in listing_cache:
+            try:
+                listing_cache[parent] = [
+                    p for p in parent.iterdir() if p.is_file()]
+            except OSError:
+                listing_cache[parent] = []
+        prefix = item.old_stem.lower() + "."
+        already = {sr.old_path for sr in item.save_renames}
+        for sib in listing_cache[parent]:
+            if sib == item.rom.path or sib in already:
+                continue
+            if not sib.name.lower().startswith(prefix):
+                continue
+            ext = sib.suffix.lower()
+            if (ext in ROM_EXTENSIONS or ext in ARCHIVE_EXTENSIONS) \
+                    and not sib.name.lower().endswith(".bak"):
+                continue  # a ROM in its own right — gets its own item
+            new_name = item.new_stem + sib.name[len(item.old_stem):]
+            new_path = item.new_rom_path.parent / new_name
+            if new_path.exists():
+                return f"companion target already exists: {new_name}"
+            item.companion_renames.append(SaveRename(sib, new_path))
         return ""
 
     def _chains_to_migrate(self, item: GameRename) -> list[str]:
@@ -246,9 +342,15 @@ class RenameEngine:
                     f"{label}: safety backup failed ({emu}): {e}")
                 return
 
-        # 2. Rename save files — roll back the ones done on failure.
+        # 2. Rename/move save files and stem companions — roll back the
+        #    ones already done on any failure.
+        try:
+            item.new_rom_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            result.errors.append(f"{label}: cannot create target dir: {e}")
+            return
         done: list[SaveRename] = []
-        for sr in item.save_renames:
+        for sr in item.save_renames + item.companion_renames:
             try:
                 self._safe_rename(sr.old_path, sr.new_path)
                 done.append(sr)
@@ -258,7 +360,7 @@ class RenameEngine:
                 self._rollback(done, result)
                 return
 
-        # 3. Rename the ROM itself.
+        # 3. Rename/move the ROM itself.
         try:
             self._safe_rename(item.rom.path, item.new_rom_path)
         except OSError as e:
@@ -288,11 +390,22 @@ class RenameEngine:
         POSIX ``rename`` silently replaces the destination; Windows
         raises.  Make both behave like Windows — a rename must never
         destroy a file the plan didn't know about (case-only renames of
-        the same file are still allowed).
+        the same file are still allowed).  Sort-moves may cross drives
+        or shares, where ``rename`` fails with EXDEV — fall back to a
+        copy-and-delete move there.
         """
         if new.exists() and os.path.normcase(str(new)) != os.path.normcase(str(old)):
             raise FileExistsError(f"target exists: {new}")
-        old.rename(new)
+        try:
+            old.rename(new)
+        except OSError as e:
+            cross_device = (
+                e.errno == errno.EXDEV
+                or getattr(e, "winerror", None) == 17  # ERROR_NOT_SAME_DEVICE
+            )
+            if not cross_device:
+                raise
+            shutil.move(str(old), str(new))
 
     @staticmethod
     def _rollback(done: list[SaveRename], result: RenameResult) -> None:

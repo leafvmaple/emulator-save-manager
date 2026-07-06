@@ -192,7 +192,11 @@
         "rename_running": "正在重命名…",
         "rename_none": "没有可规范化的 ROM（需要命中 DAT 或自建库）",
         "rename_done": "完成：{roms} 个 ROM、{saves} 个存档文件、{chains} 条备份链",
-        "rename_errors_title": "部分重命名失败"
+        "rename_errors_title": "部分重命名失败",
+        "sort_btn": "整理入库",
+        "sort_pick_dir": "选择整理目标目录",
+        "sort_title": "整理入库预览",
+        "sort_desc": "已识别的 ROM 将改名并移动到库目录（按平台分组），未识别的留在原地。同目录的存档与 .bak 原件随行，备份链联动迁移，执行前自动创建安全备份。"
     },
     "conflict": {
         "title": "存档冲突",

@@ -40,6 +40,7 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "rom_dirs": [],
     "dat_dir": "",
     "archive_passwords": [],
+    "library_dir": "",
 }
 
 
@@ -155,6 +156,11 @@ class Config:
         """Passwords tried against header-encrypted ROM archives."""
         pwds = self._data.get("archive_passwords", [])
         return [str(p) for p in pwds] if isinstance(pwds, list) else []
+
+    @property
+    def library_dir(self) -> str:
+        """Target folder for the sort-to-library ROM workflow ('' = unset)."""
+        return str(self._data.get("library_dir", "") or "")
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)

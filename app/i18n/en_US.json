@@ -192,7 +192,11 @@
         "rename_running": "Renaming…",
         "rename_none": "Nothing to normalize (needs a DAT or custom-DB identity)",
         "rename_done": "Done: {roms} ROMs, {saves} save files, {chains} backup chains",
-        "rename_errors_title": "Some renames failed"
+        "rename_errors_title": "Some renames failed",
+        "sort_btn": "Sort to Library",
+        "sort_pick_dir": "Choose library folder",
+        "sort_title": "Sort Preview",
+        "sort_desc": "Identified ROMs are renamed and moved into the library (grouped by platform); unidentified files stay behind. Adjacent saves and .bak originals travel along, backup chains migrate, and a safety backup is created first."
     },
     "conflict": {
         "title": "Save Conflict",

@@ -192,7 +192,11 @@
         "rename_running": "リネーム中…",
         "rename_none": "正規化対象がありません（DATまたはカスタムDBの一致が必要）",
         "rename_done": "完了：ROM {roms} 件、セーブ {saves} 件、履歴 {chains} 件",
-        "rename_errors_title": "一部のリネームに失敗"
+        "rename_errors_title": "一部のリネームに失敗",
+        "sort_btn": "ライブラリへ整理",
+        "sort_pick_dir": "整理先フォルダを選択",
+        "sort_title": "整理のプレビュー",
+        "sort_desc": "識別済みのROMは正規名に変更してライブラリへ移動します（プラットフォーム別）。未識別のファイルはそのまま残ります。同じフォルダのセーブと .bak も一緒に移動し、バックアップ履歴も移行、実行前に安全バックアップを作成します。"
     },
     "conflict": {
         "title": "セーブ競合",

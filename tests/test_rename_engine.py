@@ -12,13 +12,14 @@ from app.core.rom_library import RomFile
 from app.models.game_save import GameSave, SaveFile, SaveType
 
 
-def _rom(path: Path, dat_name: str = "", crc32: str = "AAAA1111") -> RomFile:
+def _rom(path: Path, dat_name: str = "", crc32: str = "AAAA1111",
+         platform: str = "SNES") -> RomFile:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
         path.write_bytes(b"ROM")
     return RomFile(
         path=path, size=3, modified=datetime.now(),
-        platform="SNES", crc32=crc32, dat_name=dat_name,
+        platform=platform, crc32=crc32, dat_name=dat_name,
     )
 
 
@@ -167,6 +168,103 @@ def test_execute_renames_rom_saves_and_migrates_chain(cfg, tmp_path):
     records = bm.list_backups("Snes9x", "Chrono Trigger (USA)")
     assert len(records) == 2
     assert bm.resolve_game_id("Snes9x", "chrono") == "Chrono Trigger (USA)"
+
+
+# ----------------------------------------------------------------------
+# Sort-to-library mode
+# ----------------------------------------------------------------------
+
+def test_sort_plan_moves_identified_and_leaves_unknown(cfg, tmp_path):
+    engine, _ = _engine(cfg)
+    lib = tmp_path / "library"
+    misnamed = _rom(tmp_path / "inbox" / "chrono.sfc",
+                    dat_name="Chrono Trigger (USA)")
+    unknown = _rom(tmp_path / "inbox" / "mystery.sfc", crc32="FFFF0000")
+    canonical = _rom(tmp_path / "inbox" / "Final Fantasy VI (USA).sfc",
+                     dat_name="Final Fantasy VI (USA)", crc32="DDDD4444")
+
+    plan = engine.plan_renames([misnamed, unknown, canonical], [],
+                               library_dir=lib)
+    # Already-canonical ROMs still move; unidentified ones never do.
+    targets = {i.new_rom_path for i in plan.items}
+    assert targets == {
+        lib / "SNES" / "Chrono Trigger (USA).sfc",
+        lib / "SNES" / "Final Fantasy VI (USA).sfc",
+    }
+    assert not plan.skipped
+
+
+def test_sort_execute_moves_rom_companions_and_adjacent_saves(cfg, tmp_path):
+    engine, bm = _engine(cfg)
+    lib = tmp_path / "library"
+    inbox = tmp_path / "inbox"
+    rom = _rom(inbox / "chrono.sfc", dat_name="Chrono Trigger (USA)")
+    (inbox / "chrono.sfc.bak").write_bytes(b"PRISTINE")  # repair original
+    adjacent = _save(inbox, "Snes9x", "chrono", {"chrono.srm": b"ADJ"})
+    remote = _save(tmp_path / "saves", "Snes9x", "chrono",
+                   {"chrono.000": b"STATE"})
+    bm.create_backup([adjacent])
+
+    plan = engine.plan_renames(
+        [rom], [adjacent, remote], library_dir=lib)
+    result = engine.execute_plan(plan)
+
+    assert result.errors == []
+    dest = lib / "SNES"
+    assert (dest / "Chrono Trigger (USA).sfc").exists()
+    # Adjacent save + .bak companion travel with the ROM…
+    assert (dest / "Chrono Trigger (USA).srm").read_bytes() == b"ADJ"
+    assert (dest / "Chrono Trigger (USA).sfc.bak").read_bytes() == b"PRISTINE"
+    # …while the emulator-dir save is renamed where it lives.
+    assert (tmp_path / "saves" / "Chrono Trigger (USA).000").exists()
+    # Inbox keeps nothing of this game; chain migrated.
+    assert list(inbox.iterdir()) == []
+    assert bm.list_backups("Snes9x", "Chrono Trigger (USA)")
+
+
+def test_sort_pure_move_keeps_stem_and_skips_chain_migration(cfg, tmp_path):
+    engine, bm = _engine(cfg)
+    lib = tmp_path / "library"
+    rom = _rom(tmp_path / "inbox" / "Chrono Trigger (USA).sfc",
+               dat_name="Chrono Trigger (USA)")
+    save = _save(tmp_path / "saves", "Snes9x", "Chrono Trigger (USA)",
+                 {"Chrono Trigger (USA).srm": b"S"})
+
+    plan = engine.plan_renames([rom], [save], library_dir=lib)
+    assert len(plan.items) == 1
+    item = plan.items[0]
+    assert item.save_renames == []       # same name, same place
+    assert item.backup_emulators == []   # stem unchanged — nothing to migrate
+
+    result = engine.execute_plan(plan)
+    assert result.errors == []
+    assert (lib / "SNES" / "Chrono Trigger (USA).sfc").exists()
+    assert (tmp_path / "saves" / "Chrono Trigger (USA).srm").exists()
+
+
+def test_sort_duplicate_dump_keeps_one_copy_in_inbox(cfg, tmp_path):
+    engine, _ = _engine(cfg)
+    lib = tmp_path / "library"
+    a = _rom(tmp_path / "inbox" / "1001 - Adventure Island.sfc",
+             dat_name="Adventure Island (USA)")
+    b = _rom(tmp_path / "inbox" / "Adventure Island (USA) copy.sfc",
+             dat_name="Adventure Island (USA)", crc32="AAAA1111")
+
+    plan = engine.plan_renames([a, b], [], library_dir=lib)
+    assert len(plan.items) == 1
+    assert plan.skipped[0].skip_reason == "duplicate target in plan"
+
+    engine.execute_plan(plan)
+    assert (lib / "SNES" / "Adventure Island (USA).sfc").exists()
+    assert (tmp_path / "inbox" / "Adventure Island (USA) copy.sfc").exists()
+
+
+def test_sort_platform_dirname_is_sanitized(cfg, tmp_path):
+    engine, _ = _engine(cfg)
+    rom = _rom(tmp_path / "inbox" / "game.rvz",
+               dat_name="Some Wii Game (USA)", platform="GameCube/Wii")
+    plan = engine.plan_renames([rom], [], library_dir=tmp_path / "lib")
+    assert plan.items[0].new_rom_path.parent.name == "GameCube_Wii"
 
 
 def test_execute_rolls_back_saves_when_rom_rename_fails(cfg, tmp_path):

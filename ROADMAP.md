@@ -75,6 +75,13 @@ DAT hash — are legitimate scan-time writes (original kept as a sibling
   from the scene filename convention plus the embedded title as a
   base-game hint. Loads the legacy `emulator-manager` shape too.
   Follow-up: in-app entry editor instead of hand-editing the JSON.
+- **Sort-to-library** *(Status: shipped)*: one-click promotion of every
+  *identified* ROM out of an inbox folder into `library_dir/<platform>/`
+  under its canonical name — unidentified files stay behind for
+  curation. Adjacent saves (melonDS-style) and `.bak` repair originals
+  travel with the ROM, emulator-dir saves rename in place, backup chains
+  migrate, duplicate dumps promote a single copy. Moves fall back to
+  copy+delete across drives/shares.
 - **Stage C — curation**: 1G1R region preference, per-platform archiving,
   interop with igir reports; mis-named detection against DAT canonical
   names.
