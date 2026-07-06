@@ -247,6 +247,72 @@ def test_repair_never_overwrites_existing_bak(cfg, tmp_path):
     assert rom.read_bytes() == _CANON_HEADER + body
 
 
+def test_zip_nes_header_repair_end_to_end(cfg, tmp_path):
+    import zipfile
+
+    body = b"PRG" * 1000
+    good_crc = _write_nes_dat(cfg, body)
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    zp = roms_dir / "Test Game (USA).zip"
+    with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("Test Game (USA).nes", _WRONG_HEADER + body)
+        zf.writestr("readme.txt", b"scene notes")
+    original_zip = zp.read_bytes()
+
+    lib = _library(cfg, roms_dir)
+    roms = lib.scan()
+
+    assert roms[0].crc32 == good_crc
+    assert roms[0].repaired is True
+    assert roms[0].dat_name == "Test Game (USA)"
+    # Whole archive backed up; member repaired; sibling member intact.
+    assert (roms_dir / "Test Game (USA).zip.bak").read_bytes() == original_zip
+    with zipfile.ZipFile(zp, "r") as zf:
+        assert zf.read("Test Game (USA).nes") == _CANON_HEADER + body
+        assert zf.read("readme.txt") == b"scene notes"
+
+    # Rescan: central-directory CRC now direct-hits the DAT.
+    roms2 = lib.scan()
+    assert roms2[0].repaired is False
+    assert roms2[0].dat_name == "Test Game (USA)"
+
+
+def test_derived_version_detection_via_embedded_identity(cfg, tmp_path):
+    import zlib as _zlib
+    from tests.test_rom_headers import gba_rom
+
+    official = gba_rom(body=b"OFFICIAL-BODY")
+    translation = gba_rom(body=b"FAN-TRANSLATED-BODY")
+    crc = f"{_zlib.crc32(official) & 0xFFFFFFFF:08X}"
+
+    dat_dir = cfg.data_dir / "dat"
+    dat_dir.mkdir(parents=True, exist_ok=True)
+    (dat_dir / "gba.dat").write_text(
+        '<?xml version="1.0"?>\n<datafile>'
+        "<header><name>Nintendo - Game Boy Advance</name></header>"
+        f'<game name="Mother 3 (Japan)"><rom name="Mother 3 (Japan).gba" '
+        f'crc="{crc}"/></game></datafile>',
+        encoding="utf-8",
+    )
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    (roms_dir / "Mother 3 (Japan).gba").write_bytes(official)
+    (roms_dir / "母亲3汉化版.gba").write_bytes(translation)
+
+    lib = _library(cfg, roms_dir)
+    from app.core.rom_library import build_report
+    report = build_report(lib.scan(), [], dat_games=lib.dat_games)
+
+    by_name = {r.path.name: r for r in report.roms}
+    hack = by_name["母亲3汉化版.gba"]
+    assert hack.dat_name == ""
+    assert hack.rom_id == "A3UJ"
+    assert hack.derived_from == "Mother 3 (Japan)"
+    assert by_name["Mother 3 (Japan).gba"].derived_from == ""
+    assert report.derived_count == 1
+
+
 def test_unmatched_nes_file_is_left_untouched(cfg, tmp_path):
     _write_nes_dat(cfg, b"PRG" * 1000)
     roms_dir = tmp_path / "roms"

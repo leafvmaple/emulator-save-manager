@@ -309,6 +309,9 @@ class RomPage(QWidget):
         if report.repaired_count:
             summary += t("rom.summary_repaired",
                          repaired=str(report.repaired_count))
+        if report.derived_count:
+            summary += t("rom.summary_derived",
+                         derived=str(report.derived_count))
         self._status_msg.setText(summary)
         self._populate_table(report)
         self._populate_orphans(report)
@@ -342,6 +345,8 @@ class RomPage(QWidget):
                 status_parts.append(t("rom.status_repaired"))
             elif rom.dat_name:
                 status_parts.append(t("rom.status_verified"))
+            elif rom.derived_from:
+                status_parts.append(t("rom.status_derived"))
             if rom.path in dup_paths:
                 status_parts.append(t("rom.status_dup"))
             if rom.path in report.matched:
@@ -359,6 +364,9 @@ class RomPage(QWidget):
             status_item = QTableWidgetItem(" · ".join(status_parts))
             if rom.dat_name:
                 status_item.setToolTip(rom.dat_name)
+            elif rom.derived_from:
+                status_item.setToolTip(
+                    t("rom.derived_tooltip", base=rom.derived_from))
             self._table.setItem(row, 4, status_item)
         self._table.show()
 

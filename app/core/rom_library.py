@@ -33,6 +33,7 @@ from loguru import logger
 
 from app.config import Config
 from app.core.dat_index import DatGame, DatIndex, load_dat_index
+from app.core.rom_headers import parse_embedded_identity
 from app.models.game_save import GameSave
 
 CACHE_VERSION = 1
@@ -127,6 +128,69 @@ def _repair_nes_header(path: Path, dat: DatIndex) -> tuple[str, DatGame] | None:
     return None
 
 
+def _repair_nes_in_zip(zip_path: Path, dat: DatIndex) -> tuple[str, DatGame] | None:
+    """Fix a non-standard iNES header inside a ``.zip`` archive.
+
+    Same contract as :func:`_repair_nes_header`: only rewrites when a
+    known header + body hashes to a DAT entry.  The whole archive is
+    preserved once as ``<name>.zip.bak`` (first write wins) and the
+    rewritten archive — repaired member plus every other member byte
+    for byte — replaces the original atomically.
+    """
+    try:
+        if zip_path.stat().st_size > _REPAIR_MAX_SIZE:
+            return None
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            nes_members = [
+                m for m in zf.infolist()
+                if not m.is_dir()
+                and Path(m.filename).suffix.lower() == ".nes"
+            ]
+            if not nes_members:
+                return None
+            target = max(nes_members, key=lambda m: m.file_size)
+            data = zf.read(target.filename)
+    except (OSError, zipfile.BadZipFile) as e:
+        logger.warning("Cannot read zip for repair {}: {}", zip_path, e)
+        return None
+
+    if len(data) < 16 or data[:4] != _NES_MAGIC:
+        return None
+    body = data[16:]
+    for hdr in dat.nes_headers:
+        crc_str = f"{zlib.crc32(hdr + body) & 0xFFFFFFFF:08X}"
+        game = dat.by_crc.get(crc_str)
+        if game is None:
+            continue
+        tmp = zip_path.with_suffix(zip_path.suffix + ".repair-tmp")
+        try:
+            bak = zip_path.with_suffix(zip_path.suffix + ".bak")
+            if not bak.exists():
+                shutil.copy2(zip_path, bak)
+            with zipfile.ZipFile(zip_path, "r") as src, \
+                    zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as dst:
+                for m in src.infolist():
+                    if m.is_dir():
+                        dst.writestr(m, b"")
+                    elif m.filename == target.filename:
+                        dst.writestr(m, hdr + body)
+                    else:
+                        dst.writestr(m, src.read(m.filename))
+            os.replace(tmp, zip_path)
+        except (OSError, zipfile.BadZipFile) as e:
+            logger.error("Zip header repair failed for {}: {}", zip_path, e)
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            return None
+        logger.info(
+            "Repaired iNES header in zip: {} → {} ({})",
+            zip_path.name, crc_str, game.name)
+        return crc_str, game
+    return None
+
+
 @dataclass
 class RomFile:
     """A single ROM file (or single-ROM archive) found in the library."""
@@ -146,6 +210,17 @@ class RomFile:
     repaired: bool = False
     """True when this scan fixed the file's header to the DAT-canonical
     one (original kept as a sibling ``.bak``)."""
+
+    rom_id: str = ""
+    """Embedded 4-char game code (GBA/NDS) — survives fan patching."""
+
+    rom_title: str = ""
+    """Embedded cartridge title (GB/GBA/NDS)."""
+
+    derived_from: str = ""
+    """DAT name of the base game when this ROM misses the DAT but a
+    verified library sibling shares its embedded identity (typical for
+    fan translations and hacks)."""
 
     @property
     def stem(self) -> str:
@@ -186,6 +261,11 @@ class RomLibraryReport:
     def repaired_count(self) -> int:
         """ROMs whose header this scan fixed to the DAT-canonical one."""
         return sum(1 for r in self.roms if r.repaired)
+
+    @property
+    def derived_count(self) -> int:
+        """ROMs identified as derived versions (translations / hacks)."""
+        return sum(1 for r in self.roms if r.derived_from)
 
 
 class RomLibrary:
@@ -273,25 +353,39 @@ class RomLibrary:
                 platform = entry.get("platform", "") or "Unknown"
             else:
                 crc, platform = self._hash_file(f)
-                cache[key] = {
+                entry = {
                     "size": stat.st_size,
                     "mtime": int(stat.st_mtime),
                     "crc32": crc,
                     "platform": platform,
                 }
+                cache[key] = entry
+                dirty = True
+
+            # Embedded identity (survives fan patching). Cached alongside
+            # the hash; pre-existing cache entries upgrade in place
+            # without re-hashing.
+            if "rom_id" in entry:
+                rom_id = entry.get("rom_id", "")
+                rom_title = entry.get("rom_title", "")
+            else:
+                rom_id, rom_title = parse_embedded_identity(f)
+                entry["rom_id"] = rom_id
+                entry["rom_title"] = rom_title
                 dirty = True
 
             # DAT verification; on a miss, try a convergent header repair
-            # for bare .nes files (iNES 1.0 / NES 2.0 header variance).
+            # (iNES 1.0 / NES 2.0 header variance) — bare files and zips.
             repaired = False
             game = dat.lookup(crc)
-            if (
-                game is None
-                and crc
-                and dat.nes_headers
-                and f.suffix.lower() == ".nes"
-            ):
-                fixed = _repair_nes_header(f, dat)
+            if game is None and crc and dat.nes_headers:
+                ext = f.suffix.lower()
+                if ext == ".nes":
+                    fixed = _repair_nes_header(f, dat)
+                elif ext == ".zip":
+                    fixed = _repair_nes_in_zip(f, dat)
+                else:
+                    fixed = None
                 if fixed is not None:
                     crc, game = fixed
                     repaired = True
@@ -299,12 +393,11 @@ class RomLibrary:
                         stat = f.stat()
                     except OSError:
                         pass
-                    cache[key] = {
+                    entry.update({
                         "size": stat.st_size,
                         "mtime": int(stat.st_mtime),
                         "crc32": crc,
-                        "platform": platform,
-                    }
+                    })
                     dirty = True
 
             roms.append(RomFile(
@@ -315,6 +408,8 @@ class RomLibrary:
                 crc32=crc,
                 dat_name=game.name if game else "",
                 repaired=repaired,
+                rom_id=rom_id,
+                rom_title=rom_title,
             ))
 
         if dirty:
@@ -418,6 +513,29 @@ def build_report(
     report.duplicate_groups = [
         group for group in by_crc.values() if len(group) > 1
     ]
+
+    # Derived-version detection: a CRC-missing ROM whose embedded
+    # identity matches a DAT-verified sibling is a translation / hack
+    # of that base game (headers survive fan patching).
+    base_by_id: dict[tuple[str, str], str] = {}
+    base_by_title: dict[tuple[str, str], str] = {}
+    for rom in roms:
+        if not rom.dat_name:
+            continue
+        if rom.rom_id:
+            base_by_id.setdefault((rom.platform, rom.rom_id), rom.dat_name)
+        if rom.rom_title:
+            base_by_title.setdefault(
+                (rom.platform, rom.rom_title), rom.dat_name)
+    for rom in roms:
+        if rom.dat_name:
+            continue
+        base = ""
+        if rom.rom_id:
+            base = base_by_id.get((rom.platform, rom.rom_id), "")
+        if not base and rom.rom_title:
+            base = base_by_title.get((rom.platform, rom.rom_title), "")
+        rom.derived_from = base
 
     by_stem: dict[str, list[RomFile]] = {}
     for rom in roms:
