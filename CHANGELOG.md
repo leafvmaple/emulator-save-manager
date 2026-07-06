@@ -1,3 +1,13 @@
+# v1.1.1
+
+Released on 2026-07-06
+
+## ✨ Features
+
+- feat(rom): DAT installer with validation and family replacement (`4ad36ac`)
+
+---
+
 # v1.1.0
 
 Released on 2026-07-06
