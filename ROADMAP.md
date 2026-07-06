@@ -38,11 +38,16 @@ DAT hash — are legitimate scan-time writes (original kept as a sibling
   stem, and report ROMs without saves / saves without ROMs.
 - **DAT verification + convergent NES header repair** *(Status: shipped)*:
   No-Intro DATs dropped into `<data_dir>/dat` (config `dat_dir`) verify
-  CRCs against canonical names; a bare `.nes` miss is re-tried with every
-  header seen in the headered DAT and fixed in place on a hit (ported from
-  the proven `emulator-manager` matcher). Follow-ups: propagate repairs
-  into `.zip` archives; GB/GBA/NDS header parsers so fan translations are
-  detected as "derived from X" (header ID matches, CRC doesn't).
+  CRCs against canonical names; a `.nes` miss — bare file or inside a
+  `.zip` — is re-tried with every header seen in the headered DAT and
+  fixed in place on a hit (ported from the proven `emulator-manager`
+  matcher).
+- **Derived-version detection** *(Status: shipped)*: GB/GBA/NDS cartridge
+  headers are parsed (game code / title survive fan patching); a
+  CRC-missing ROM whose embedded identity matches a DAT-verified library
+  sibling is labelled "derived from X" — fan translations and hacks
+  identified without touching the file. Follow-up: a bundled base-game
+  DB so derived detection works without an official sibling present.
 - **Stage B — save-aware normalization**: rename ROMs to a canonical
   convention (No-Intro style) with a dry-run preview, migrating emulator save
   files and backup keys (via the alias table) in the same transaction.
@@ -61,6 +66,11 @@ DAT hash — are legitimate scan-time writes (original kept as a sibling
 
 ### Performance
 
+- **Streaming sync transfers** *(Status: shipped — extracted from the
+  `feat/rom-core-integration` branch)*: push/pull stream file content in
+  chunks with per-transfer progress reporting instead of whole-file
+  reads; remote content hashes come from sidecar metadata so unchanged
+  games skip the download entirely.
 - **Large libraries** — the scan / backup / restore lists build every card
   eagerly with no scroll virtualization. This is fine for typical libraries but
   should be stress-tested at 50+ games and, if needed, virtualized.

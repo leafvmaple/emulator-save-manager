@@ -146,7 +146,10 @@
         "sync_success": "Sync complete: pushed {push}, pulled {pull}",
         "conflict_found": "{count} conflicts found",
         "crc32_mismatch_title": "Game version mismatch",
-        "crc32_mismatch_desc": "Local and remote CRC32 checksums differ — the game disc versions may be different and saves may be incompatible. Force overwrite?"
+        "crc32_mismatch_desc": "Local and remote CRC32 checksums differ — the game disc versions may be different and saves may be incompatible. Force overwrite?",
+        "progress_push": "Pushing",
+        "progress_pull": "Pulling",
+        "progress_check": "Checking remote"
     },
     "rom": {
         "title": "ROM Library",
@@ -171,7 +174,10 @@
         "status_verified": "DAT verified",
         "status_repaired": "Header repaired",
         "summary_dat": " · {verified} DAT matches",
-        "summary_repaired": " · {repaired} headers repaired (originals kept as .bak)"
+        "summary_repaired": " · {repaired} headers repaired (originals kept as .bak)",
+        "status_derived": "Derived",
+        "derived_tooltip": "Base game: {base}",
+        "summary_derived": " · {derived} derived (translations/hacks)"
     },
     "conflict": {
         "title": "Save Conflict",

@@ -146,7 +146,10 @@
         "sync_success": "同期完了: プッシュ {push} 個、プル {pull} 個",
         "conflict_found": "{count} 件の競合が見つかりました",
         "crc32_mismatch_title": "ゲームバージョンが不一致",
-        "crc32_mismatch_desc": "ローカルとリモートのCRC32チェックサムが異なります。ディスクバージョンが異なる可能性があり、セーブデータに互換性がない場合があります。強制上書きしますか？"
+        "crc32_mismatch_desc": "ローカルとリモートのCRC32チェックサムが異なります。ディスクバージョンが異なる可能性があり、セーブデータに互換性がない場合があります。強制上書きしますか？",
+        "progress_push": "プッシュ中",
+        "progress_pull": "プル中",
+        "progress_check": "リモートを確認中"
     },
     "rom": {
         "title": "ROMライブラリ",
@@ -171,7 +174,10 @@
         "status_verified": "DAT一致",
         "status_repaired": "ヘッダー修正済み",
         "summary_dat": " · DAT一致 {verified} 件",
-        "summary_repaired": " · ヘッダー修正 {repaired} 件（元ファイルは .bak として保存）"
+        "summary_repaired": " · ヘッダー修正 {repaired} 件（元ファイルは .bak として保存）",
+        "status_derived": "派生版",
+        "derived_tooltip": "ベース: {base}",
+        "summary_derived": " · 派生版 {derived} 件（翻訳/改造）"
     },
     "conflict": {
         "title": "セーブ競合",

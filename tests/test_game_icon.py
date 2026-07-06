@@ -63,6 +63,23 @@ def test_download_image_handles_network_error(tmp_path, monkeypatch):
     assert prov._download_image("http://x/y.jpg", prov._cache_dir / "y.jpg") is None
 
 
+def test_download_cover_negative_cache_skips_repeated_misses(tmp_path, monkeypatch):
+    prov = GameIconProvider(tmp_path / "icons")
+    prov.register_cover_resolver("Citra", lambda gid: [f"http://x/{gid}.png"])
+    calls = 0
+
+    def miss(url, dest, label=""):
+        nonlocal calls
+        calls += 1
+        return None
+
+    monkeypatch.setattr(prov, "_download_image", miss)
+
+    assert prov.download_cover("0004000000170F00", emulator="Citra") is None
+    assert prov.download_cover("0004000000170F00", emulator="Citra") is None
+    assert calls == 1
+
+
 def test_download_image_rejects_tiny_response(tmp_path, monkeypatch):
     prov = GameIconProvider(tmp_path / "icons")
 

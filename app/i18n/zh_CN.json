@@ -146,7 +146,10 @@
         "sync_success": "同步完成: 推送 {push} 个, 拉取 {pull} 个",
         "conflict_found": "发现 {count} 个冲突",
         "crc32_mismatch_title": "游戏版本不一致",
-        "crc32_mismatch_desc": "本地与远端的游戏 CRC32 校验值不同，可能是不同版本的游戏光盘，存档可能不兼容。是否要强制覆盖？"
+        "crc32_mismatch_desc": "本地与远端的游戏 CRC32 校验值不同，可能是不同版本的游戏光盘，存档可能不兼容。是否要强制覆盖？",
+        "progress_push": "正在推送",
+        "progress_pull": "正在拉取",
+        "progress_check": "正在检查远端"
     },
     "rom": {
         "title": "ROM 库",
@@ -171,7 +174,10 @@
         "status_verified": "命中 DAT",
         "status_repaired": "头部已修正",
         "summary_dat": " · {verified} 个命中 DAT",
-        "summary_repaired": " · {repaired} 个头部已修正（原件已备份为 .bak）"
+        "summary_repaired": " · {repaired} 个头部已修正（原件已备份为 .bak）",
+        "status_derived": "衍生版本",
+        "derived_tooltip": "母本: {base}",
+        "summary_derived": " · {derived} 个衍生版本（汉化/改版）"
     },
     "conflict": {
         "title": "存档冲突",

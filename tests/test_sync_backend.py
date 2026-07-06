@@ -19,6 +19,7 @@ class FakeWebDavClient:
 
     def __init__(self) -> None:
         self.store: dict[str, bytes] = {}
+        self.downloads: list[str] = []
 
     @staticmethod
     def _n(p: str) -> str:
@@ -42,6 +43,7 @@ class FakeWebDavClient:
         self.store[self._n(p)] = fileobj.read()
 
     def download_fileobj(self, p: str, fileobj) -> None:
+        self.downloads.append(self._n(p))
         fileobj.write(self.store[self._n(p)])
 
     def mkdir(self, p: str) -> None:
@@ -100,6 +102,24 @@ def test_local_backend_roundtrip(tmp_path):
     assert not b.exists("a/b.zip")
 
 
+def test_local_backend_write_file_reports_progress(tmp_path):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"x" * 3000)
+    b = LocalFolderBackend(tmp_path / "sync")
+    (tmp_path / "sync").mkdir()
+
+    events: list[tuple[int, int | None]] = []
+    b.write_file(
+        "a/source.bin",
+        source,
+        progress_callback=lambda done, total: events.append((done, total)),
+    )
+
+    assert b.read_bytes("a/source.bin") == source.read_bytes()
+    assert events
+    assert events[-1] == (3000, 3000)
+
+
 def test_local_backend_unconfigured(tmp_path):
     b = LocalFolderBackend(tmp_path / "missing")
     assert not b.is_configured
@@ -127,6 +147,24 @@ def test_webdav_backend_roundtrip_and_paths():
     assert b.read_bytes("nope.zip") is None
     b.delete("PCSX2/SLUS-1/2020.zip")
     assert not b.exists("PCSX2/SLUS-1/2020.zip")
+
+
+def test_webdav_backend_write_file_reports_progress(tmp_path):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"WEB-DAV-DATA")
+    client = FakeWebDavClient()
+    b = WebDavBackend("http://dav.example/", "user", "pw", client=client)
+
+    events: list[tuple[int, int | None]] = []
+    b.write_file(
+        "a/source.bin",
+        source,
+        progress_callback=lambda done, total: events.append((done, total)),
+    )
+
+    assert b.read_bytes("a/source.bin") == b"WEB-DAV-DATA"
+    assert events
+    assert events[-1] == (len(b"WEB-DAV-DATA"), len(b"WEB-DAV-DATA"))
 
 
 def test_webdav_backend_not_configured_without_url():
@@ -234,6 +272,25 @@ def test_sync_over_webdav_backend(tmp_path, make_game_save):
     # Re-pull is a no-op (identical content), not a conflict.
     res = smB.pull_all()
     assert res.pulled == 0 and not res.conflicts
+
+
+def test_webdav_push_skip_uses_sidecar_hash_without_downloading_zip(
+    tmp_path, make_game_save,
+):
+    client = FakeWebDavClient()
+    c = _Cfg(backup_path=tmp_path / "backups", machine_id="A")
+    bm = BackupManager(c)
+    sm = SyncManager(c, bm, backend=WebDavBackend("http://x", "u", "p", client=client))
+
+    bm.create_backup([make_game_save(tmp_path / "sa", files={"x.bin": b"HELLO"})])
+    assert sm.push_all().pushed == 1
+
+    client.downloads.clear()
+    res = sm.push_all()
+
+    assert res.pushed == 0
+    assert not res.conflicts
+    assert not any(path.endswith(".zip") for path in client.downloads)
 
 
 def test_webdav_sync_conflict(tmp_path, make_game_save):
