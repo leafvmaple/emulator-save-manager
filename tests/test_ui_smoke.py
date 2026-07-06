@@ -413,6 +413,48 @@ def test_rom_page_scan_end_to_end(qtbot, cfg, tmp_path):
     assert "Renamed Away" in page._orphan_body.text()
 
 
+def test_rename_dialog_builds_and_selects(qtbot, cfg, tmp_path):
+    """The Stage B preview dialog lists plan items and honors unchecking."""
+    from datetime import datetime
+    from PySide6.QtWidgets import QWidget
+    from app.core.rename_engine import GameRename, RenamePlan, SaveRename
+    from app.core.rom_library import RomFile
+    from app.ui.pages.rom_page import _RenameDialog
+
+    rom = RomFile(path=tmp_path / "chrono.sfc", size=3,
+                  modified=datetime.now(), platform="SNES",
+                  crc32="AAAA1111", dat_name="Chrono Trigger (USA)")
+    item = GameRename(
+        rom=rom, new_stem="Chrono Trigger (USA)", reason="dat",
+        save_renames=[SaveRename(tmp_path / "chrono.srm",
+                                 tmp_path / "Chrono Trigger (USA).srm")],
+        backup_emulators=["Snes9x"],
+    )
+    skipped = GameRename(rom=rom, new_stem="X", reason="dat",
+                         skip_reason="target file already exists")
+    parent = QWidget()
+    parent.resize(800, 600)
+    qtbot.addWidget(parent)
+    dlg = _RenameDialog(RenamePlan(items=[item], skipped=[skipped]), parent)
+    qtbot.addWidget(dlg)
+
+    assert dlg.titleLabel.text() and "." not in dlg.titleLabel.text()
+    assert dlg.selected_items == [item]
+    dlg._checks[0][1].setChecked(False)
+    assert dlg.selected_items == []
+
+
+def test_rom_page_rename_button_needs_scan_and_backup_manager(qtbot, cfg):
+    from app.core.backup import BackupManager
+    from app.ui.pages.rom_page import RomPage
+
+    page = RomPage()
+    qtbot.addWidget(page)
+    page.set_config(cfg)
+    page.set_backup_manager(BackupManager(cfg))
+    assert not page._rename_btn.isEnabled()  # enabled only after a scan
+
+
 def test_rom_page_scan_without_dirs_warns(qtbot, cfg):
     from app.ui.pages.rom_page import RomPage
 

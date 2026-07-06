@@ -182,7 +182,17 @@
         "summary_custom": " · {custom} in custom DB",
         "export_skeleton": "Draft Unidentified",
         "skeleton_done": "{count} draft entries written to {file} — edit and rescan to apply",
-        "skeleton_none": "No unidentified ROMs to draft"
+        "skeleton_none": "No unidentified ROMs to draft",
+        "rename_btn": "Normalize Names",
+        "rename_title": "Rename Preview",
+        "rename_desc": "These ROMs will be renamed to their canonical names. Matching saves and backup chains migrate in the same step; a safety backup is created first.",
+        "rename_saves_n": "{count} save files follow",
+        "rename_chain": "backup chain migrates ({emus})",
+        "rename_execute": "Rename",
+        "rename_running": "Renaming…",
+        "rename_none": "Nothing to normalize (needs a DAT or custom-DB identity)",
+        "rename_done": "Done: {roms} ROMs, {saves} save files, {chains} backup chains",
+        "rename_errors_title": "Some renames failed"
     },
     "conflict": {
         "title": "Save Conflict",

@@ -48,11 +48,16 @@ DAT hash — are legitimate scan-time writes (original kept as a sibling
   sibling is labelled "derived from X" — fan translations and hacks
   identified without touching the file. Follow-up: a bundled base-game
   DB so derived detection works without an official sibling present.
-- **Stage B — save-aware normalization**: rename ROMs to a canonical
-  convention (No-Intro style) with a dry-run preview, migrating emulator save
-  files and backup keys (via the alias table) in the same transaction.
-  Automatic safety backup before execution. The legacy `emulator-manager`
-  `rename_engine.py` is prior art to port.
+- **Stage B — save-aware normalization** *(Status: shipped)*:
+  `rename_engine` plans canonical renames from DAT / custom-DB identity
+  (No-Intro name, or `base [T-lang group version]` for translations) and
+  executes per game: safety backup → save files follow the new stem →
+  ROM rename → backup-chain migration via the alias table. Conflicts are
+  skipped at plan time, mid-game failures roll the game's saves back, and
+  renames refuse to clobber existing files on every platform. The ROM
+  page's "Normalize Names" button previews the plan with per-item
+  checkboxes. Follow-ups: rename members inside zip archives to match;
+  configurable name templates.
 - **Custom game DB** *(Status: shipped)*: `games_custom.json` in the data
   dir keys identities by content CRC for ROMs no DAT will ever match
   (translations, hacks, unlicensed originals); the "Draft Unidentified"

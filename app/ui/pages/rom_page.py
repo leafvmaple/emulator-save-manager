@@ -15,13 +15,16 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 from qfluentwidgets import (
-    BodyLabel, CaptionLabel, CardWidget, IconWidget, InfoBar,
-    InfoBarPosition, PrimaryPushButton, ProgressRing, PushButton,
-    StrongBodyLabel, SubtitleLabel, TableWidget, TransparentToolButton,
+    BodyLabel, CaptionLabel, CardWidget, CheckBox, IconWidget, InfoBar,
+    InfoBarPosition, MessageBoxBase, PrimaryPushButton, ProgressRing,
+    PushButton, SmoothScrollArea, StrongBodyLabel, SubtitleLabel,
+    TableWidget, TransparentToolButton,
     FluentIcon as FIF,
 )
 
 from app.config import Config
+from app.core.backup import BackupManager
+from app.core.rename_engine import GameRename, RenameEngine, RenamePlan, RenameResult
 from app.core.rom_library import RomLibrary, RomLibraryReport, build_report
 from app.i18n import t
 from app.models.game_save import GameSave
@@ -69,15 +72,91 @@ class _RomScanWorker(QThread):
             self.error.emit(str(e))
 
 
+class _RenameWorker(QThread):
+    """Background thread that applies a rename plan."""
+
+    finished = Signal(object)  # RenameResult
+    error = Signal(str)
+
+    def __init__(self, engine: RenameEngine, plan: RenamePlan,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._engine = engine
+        self._plan = plan
+
+    def run(self) -> None:
+        try:
+            self.finished.emit(self._engine.execute_plan(self._plan))
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class _RenameDialog(MessageBoxBase):
+    """Dry-run preview — pick which normalizations to apply."""
+
+    def __init__(self, plan: RenamePlan, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._checks: list[tuple[GameRename, CheckBox]] = []
+
+        self.titleLabel = SubtitleLabel(t("rom.rename_title"), self)
+        self.viewLayout.addWidget(self.titleLabel)
+        self.viewLayout.addWidget(BodyLabel(t("rom.rename_desc"), self))
+
+        inner = QWidget(self)
+        box = QVBoxLayout(inner)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(6)
+        for item in plan.items:
+            cb = CheckBox(f"{item.rom.path.name}  →  {item.new_name}", inner)
+            cb.setChecked(True)
+            self._checks.append((item, cb))
+            box.addWidget(cb)
+            details = []
+            if item.save_renames:
+                details.append(t("rom.rename_saves_n",
+                                 count=str(len(item.save_renames))))
+            if item.backup_emulators:
+                details.append(t("rom.rename_chain",
+                                 emus=", ".join(item.backup_emulators)))
+            if details:
+                cap = CaptionLabel("      " + " · ".join(details), inner)
+                cap.setStyleSheet(f"color:{theme.text_muted()};")
+                box.addWidget(cap)
+        for item in plan.skipped:
+            cap = CaptionLabel(
+                f"⊘ {item.rom.path.name} — {item.skip_reason}", inner)
+            cap.setStyleSheet(f"color:{theme.text_muted()};")
+            box.addWidget(cap)
+        box.addStretch()
+
+        scroll = SmoothScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(inner)
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }")
+        scroll.setMaximumHeight(320)
+        self.viewLayout.addWidget(scroll)
+
+        self.yesButton.setText(t("rom.rename_execute"))
+        self.cancelButton.setText(t("common.cancel"))
+        self.widget.setMinimumWidth(560)
+
+    @property
+    def selected_items(self) -> list[GameRename]:
+        return [item for item, cb in self._checks if cb.isChecked()]
+
+
 class RomPage(QWidget):
-    """Read-only ROM library view with duplicate / save-link analysis."""
+    """ROM library view — analysis, DAT verification, save-aware renames."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("rom_page")
         self._config: Config | None = None
+        self._backup_mgr: BackupManager | None = None
         self._saves: list[GameSave] = []
         self._worker: _RomScanWorker | None = None
+        self._rename_worker: _RenameWorker | None = None
         self._report: RomLibraryReport | None = None
         self._init_ui()
 
@@ -88,6 +167,9 @@ class RomPage(QWidget):
     def set_config(self, config: Config) -> None:
         self._config = config
         self._refresh_dirs()
+
+    def set_backup_manager(self, backup_mgr: BackupManager) -> None:
+        self._backup_mgr = backup_mgr
 
     def update_saves(self, saves: list) -> None:
         """Receive the latest save scan (connected to scan_page.saves_updated)."""
@@ -149,6 +231,11 @@ class RomPage(QWidget):
         self._skeleton_btn.clicked.connect(self._on_export_skeleton)
         self._skeleton_btn.setEnabled(False)  # needs a completed scan
         action_bar.addWidget(self._skeleton_btn, 0, av)
+
+        self._rename_btn = PushButton(FIF.EDIT, t("rom.rename_btn"), self)
+        self._rename_btn.clicked.connect(self._on_normalize)
+        self._rename_btn.setEnabled(False)  # needs a completed scan
+        action_bar.addWidget(self._rename_btn, 0, av)
 
         self._cancel_btn = PushButton(FIF.CLOSE, t("common.cancel"), self)
         self._cancel_btn.clicked.connect(self._on_cancel)
@@ -344,6 +431,7 @@ class RomPage(QWidget):
                          derived=str(report.derived_count))
         self._status_msg.setText(summary)
         self._skeleton_btn.setEnabled(True)
+        self._rename_btn.setEnabled(self._backup_mgr is not None)
         self._populate_table(report)
         self._populate_orphans(report)
 
@@ -358,6 +446,67 @@ class RomPage(QWidget):
             content=error,
             parent=self, position=InfoBarPosition.TOP, duration=5000,
         )
+
+    # ------------------------------------------------------------------
+    # Save-aware normalization (Stage B)
+    # ------------------------------------------------------------------
+
+    def _on_normalize(self) -> None:
+        """Preview and apply canonical renames with save/backup migration."""
+        if self._report is None or self._config is None \
+                or self._backup_mgr is None:
+            return
+        engine = RenameEngine(self._config, self._backup_mgr)
+        plan = engine.plan_renames(self._report.roms, self._saves)
+        if not plan.items and not plan.skipped:
+            InfoBar.info(
+                title=t("rom.rename_btn"),
+                content=t("rom.rename_none"),
+                parent=self, position=InfoBarPosition.TOP, duration=4000,
+            )
+            return
+
+        dlg = _RenameDialog(plan, self.window())
+        if not dlg.exec():
+            return
+        selected = dlg.selected_items
+        if not selected:
+            return
+
+        self._rename_btn.setEnabled(False)
+        self._scan_btn.setEnabled(False)
+        self._progress.show()
+        self._status_msg.setText(t("rom.rename_running"))
+
+        run_plan = RenamePlan(items=selected, skipped=[])
+        self._rename_worker = _RenameWorker(engine, run_plan, self)
+        self._rename_worker.finished.connect(self._on_rename_finished)
+        self._rename_worker.error.connect(self._on_scan_error)
+        self._rename_worker.start()
+
+    def _on_rename_finished(self, result: RenameResult) -> None:
+        self._progress.hide()
+        self._scan_btn.setEnabled(True)
+        summary = t(
+            "rom.rename_done",
+            roms=str(result.renamed_roms),
+            saves=str(result.renamed_saves),
+            chains=str(result.migrated_backups),
+        )
+        if result.errors:
+            InfoBar.warning(
+                title=t("rom.rename_errors_title"),
+                content=summary + "\n" + "\n".join(result.errors[:5]),
+                parent=self, position=InfoBarPosition.TOP, duration=10000,
+            )
+        else:
+            InfoBar.success(
+                title=t("rom.rename_btn"),
+                content=summary,
+                parent=self, position=InfoBarPosition.TOP, duration=5000,
+            )
+        # Paths changed on disk — refresh the library view.
+        self._on_scan()
 
     # ------------------------------------------------------------------
     # Results

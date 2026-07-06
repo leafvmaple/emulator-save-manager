@@ -182,7 +182,17 @@
         "summary_custom": " · カスタムDB {custom} 件",
         "export_skeleton": "未識別をドラフト",
         "skeleton_done": "{file} にドラフト {count} 件を書き込みました。編集後に再スキャンしてください",
-        "skeleton_none": "ドラフト対象の未識別ROMはありません"
+        "skeleton_none": "ドラフト対象の未識別ROMはありません",
+        "rename_btn": "名前を正規化",
+        "rename_title": "リネームのプレビュー",
+        "rename_desc": "以下のROMを正規名に変更します。同名のセーブとバックアップ履歴も同時に移行され、実行前に安全バックアップを作成します。",
+        "rename_saves_n": "セーブ {count} 件が追随",
+        "rename_chain": "バックアップ履歴を移行（{emus}）",
+        "rename_execute": "リネーム実行",
+        "rename_running": "リネーム中…",
+        "rename_none": "正規化対象がありません（DATまたはカスタムDBの一致が必要）",
+        "rename_done": "完了：ROM {roms} 件、セーブ {saves} 件、履歴 {chains} 件",
+        "rename_errors_title": "一部のリネームに失敗"
     },
     "conflict": {
         "title": "セーブ競合",

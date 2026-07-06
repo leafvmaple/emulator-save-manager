@@ -81,6 +81,7 @@ def main() -> None:
     window.sync_page.set_sync_manager(sync_mgr)
     window.sync_page.set_config(config)
     window.rom_page.set_config(config)
+    window.rom_page.set_backup_manager(backup_mgr)
     window.settings_page.set_config(config)
     window.settings_page.set_plugin_manager(pm)
 
@@ -152,6 +153,7 @@ def _run_headless_auto_backup(
     logger.info("Starting headless auto-backup daemon: every {} minutes", minutes)
     run_auto_backup_loop(scanner, backup_mgr, minutes * 60, stop_event)
     sys.exit(0)
+
 
 def _selftest(pm: "PluginManager") -> None:
     """Verify bundled resources loaded, then exit (0 = OK, 1 = broken).

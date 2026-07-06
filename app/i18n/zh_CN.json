@@ -182,7 +182,17 @@
         "summary_custom": " · {custom} 个自建库收录",
         "export_skeleton": "导出未识别骨架",
         "skeleton_done": "已写入 {count} 条骨架到 {file}，编辑补全后重新扫描即可生效",
-        "skeleton_none": "没有需要收录的未识别 ROM"
+        "skeleton_none": "没有需要收录的未识别 ROM",
+        "rename_btn": "规范化重命名",
+        "rename_title": "重命名预览",
+        "rename_desc": "以下 ROM 将改为规范名称。同名存档与备份链会联动迁移，执行前自动创建安全备份。",
+        "rename_saves_n": "联动 {count} 个存档文件",
+        "rename_chain": "迁移备份链（{emus}）",
+        "rename_execute": "执行重命名",
+        "rename_running": "正在重命名…",
+        "rename_none": "没有可规范化的 ROM（需要命中 DAT 或自建库）",
+        "rename_done": "完成：{roms} 个 ROM、{saves} 个存档文件、{chains} 条备份链",
+        "rename_errors_title": "部分重命名失败"
     },
     "conflict": {
         "title": "存档冲突",
