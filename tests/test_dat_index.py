@@ -41,9 +41,10 @@ def test_parse_dat_entries_headers_and_bios_skip(tmp_path):
 
     platform, entries, headers = parse_dat(dat)
     assert platform == "NES"
-    assert entries["AAAA1111"] == "Super Mario Bros. (World)"
+    assert entries["AAAA1111"] == ("Super Mario Bros. (World)", 40976)
     # Games without a numeric id still count; BIOS entries never do.
-    assert entries["CCCC3333"] == "Contra (USA)"
+    # Missing size attributes parse as 0 (size check then disabled).
+    assert entries["CCCC3333"] == ("Contra (USA)", 0)
     assert "BBBB2222" not in entries
     # Both header spellings (spaced / packed) collected as 16 bytes.
     assert len(headers) == 2
@@ -67,6 +68,7 @@ def test_load_dat_index_merges_files(tmp_path):
     index = load_dat_index(tmp_path)
     assert index.game_count == 3
     assert index.lookup("aaaa1111").name == "Super Mario Bros. (World)"
+    assert index.lookup("aaaa1111").size == 40976
     assert index.lookup("DDDD4444").platform == "GBA"
     assert index.lookup("BBBB2222") is None
     assert len(index.nes_headers) == 2

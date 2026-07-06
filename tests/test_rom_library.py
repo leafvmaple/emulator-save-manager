@@ -313,6 +313,95 @@ def test_derived_version_detection_via_embedded_identity(cfg, tmp_path):
     assert report.derived_count == 1
 
 
+def test_repair_rejects_cross_platform_crc_collision(cfg, tmp_path):
+    """Field incident: repaired CRC collided with a GBC entry.
+
+    The repair tries ~1000 headers per file against a 32-bit hash, so a
+    raw multi-platform lookup will eventually collide. A candidate whose
+    platform is not NES must be rejected and the file left untouched.
+    """
+    body = b"PRG" * 1000
+    colliding_crc = _crc(_CANON_HEADER + body)
+    dat_dir = cfg.data_dir / "dat"
+    dat_dir.mkdir(parents=True, exist_ok=True)
+    # NES DAT supplies the known header but no matching entry…
+    (dat_dir / "nes.dat").write_text(
+        '<?xml version="1.0"?><datafile>'
+        "<header><name>Nintendo - Nintendo Entertainment System (Headered)"
+        "</name></header>"
+        f'<game name="Unrelated"><rom name="u.nes" crc="12345678" '
+        f'header="{_CANON_HEADER.hex().upper()}"/></game></datafile>',
+        encoding="utf-8",
+    )
+    # …while the colliding CRC belongs to a Game Boy game.
+    (dat_dir / "gb.dat").write_text(
+        '<?xml version="1.0"?><datafile>'
+        "<header><name>Nintendo - Game Boy</name></header>"
+        f'<game name="Colliding GB Game"><rom name="c.gb" '
+        f'crc="{colliding_crc}"/></game></datafile>',
+        encoding="utf-8",
+    )
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    rom = roms_dir / "game.nes"
+    content = _WRONG_HEADER + body
+    rom.write_bytes(content)
+
+    roms = _library(cfg, roms_dir).scan()
+    assert rom.read_bytes() == content        # untouched
+    assert not (roms_dir / "game.nes.bak").exists()
+    assert roms[0].repaired is False
+    assert roms[0].dat_name == ""
+
+
+def test_repair_rejects_size_mismatch(cfg, tmp_path):
+    body = b"PRG" * 1000
+    good_crc = _crc(_CANON_HEADER + body)
+    wrong_size = 16 + len(body) + 1
+    dat_dir = cfg.data_dir / "dat"
+    dat_dir.mkdir(parents=True, exist_ok=True)
+    (dat_dir / "nes.dat").write_text(
+        '<?xml version="1.0"?><datafile>'
+        "<header><name>Nintendo - Nintendo Entertainment System (Headered)"
+        "</name></header>"
+        f'<game name="Wrong Size Game"><rom name="w.nes" crc="{good_crc}" '
+        f'size="{wrong_size}" header="{_CANON_HEADER.hex().upper()}"/>'
+        "</game></datafile>",
+        encoding="utf-8",
+    )
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    rom = roms_dir / "game.nes"
+    content = _WRONG_HEADER + body
+    rom.write_bytes(content)
+
+    roms = _library(cfg, roms_dir).scan()
+    assert rom.read_bytes() == content
+    assert roms[0].repaired is False
+
+
+def test_direct_lookup_rejects_platform_mismatch(cfg, tmp_path):
+    """A .gb file whose CRC collides with an NES entry is not 'verified'."""
+    content = b"GB-CONTENT"
+    dat_dir = cfg.data_dir / "dat"
+    dat_dir.mkdir(parents=True, exist_ok=True)
+    (dat_dir / "nes.dat").write_text(
+        '<?xml version="1.0"?><datafile>'
+        "<header><name>Nintendo - Nintendo Entertainment System (Headered)"
+        "</name></header>"
+        f'<game name="NES Game"><rom name="n.nes" crc="{_crc(content)}"/>'
+        "</game></datafile>",
+        encoding="utf-8",
+    )
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    (roms_dir / "game.gb").write_bytes(content)
+
+    roms = _library(cfg, roms_dir).scan()
+    assert roms[0].platform == "Game Boy"
+    assert roms[0].dat_name == ""
+
+
 def test_unmatched_nes_file_is_left_untouched(cfg, tmp_path):
     _write_nes_dat(cfg, b"PRG" * 1000)
     roms_dir = tmp_path / "roms"

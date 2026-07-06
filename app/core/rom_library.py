@@ -85,6 +85,24 @@ _NES_MAGIC = b"NES\x1a"
 _REPAIR_MAX_SIZE = 32 * 1024 * 1024
 
 
+def _match_nes_dump(hdr: bytes, body: bytes, dat: DatIndex) -> DatGame | None:
+    """Return the NES DAT entry that ``hdr + body`` is, or ``None``.
+
+    CRC32 alone is 32 bits and the repair tries ~1000 headers per file,
+    so a bare hash lookup across a multi-platform index WILL eventually
+    collide (observed in the field: an aftermarket NES dump "matched" a
+    GBC game).  A candidate must clear all three factors: CRC, platform
+    ``NES``, and — when the DAT records it — the exact dump size.
+    """
+    crc_str = f"{zlib.crc32(hdr + body) & 0xFFFFFFFF:08X}"
+    game = dat.by_crc.get(crc_str)
+    if game is None or game.platform != "NES":
+        return None
+    if game.size and game.size != len(hdr) + len(body):
+        return None
+    return game
+
+
 def _repair_nes_header(path: Path, dat: DatIndex) -> tuple[str, DatGame] | None:
     """Try every known iNES header against *path*; fix in place on a DAT hit.
 
@@ -108,11 +126,10 @@ def _repair_nes_header(path: Path, dat: DatIndex) -> tuple[str, DatGame] | None:
 
     body = data[16:]
     for hdr in dat.nes_headers:
-        crc = zlib.crc32(hdr + body) & 0xFFFFFFFF
-        crc_str = f"{crc:08X}"
-        game = dat.by_crc.get(crc_str)
+        game = _match_nes_dump(hdr, body, dat)
         if game is None:
             continue
+        crc_str = f"{zlib.crc32(hdr + body) & 0xFFFFFFFF:08X}"
         try:
             bak = path.with_suffix(path.suffix + ".bak")
             if not bak.exists():
@@ -159,10 +176,10 @@ def _repair_nes_in_zip(zip_path: Path, dat: DatIndex) -> tuple[str, DatGame] | N
         return None
     body = data[16:]
     for hdr in dat.nes_headers:
-        crc_str = f"{zlib.crc32(hdr + body) & 0xFFFFFFFF:08X}"
-        game = dat.by_crc.get(crc_str)
+        game = _match_nes_dump(hdr, body, dat)
         if game is None:
             continue
+        crc_str = f"{zlib.crc32(hdr + body) & 0xFFFFFFFF:08X}"
         tmp = zip_path.with_suffix(zip_path.suffix + ".repair-tmp")
         try:
             bak = zip_path.with_suffix(zip_path.suffix + ".bak")
@@ -392,6 +409,15 @@ class RomLibrary:
             # (iNES 1.0 / NES 2.0 header variance) — bare files and zips.
             repaired = False
             game = dat.lookup(crc)
+            if (
+                game is not None
+                and game.platform
+                and platform not in ("", "Unknown")
+                and game.platform != platform
+            ):
+                # A raw 32-bit CRC hit on another platform's entry is a
+                # collision, not an identification.
+                game = None
             if game is None and crc and dat.nes_headers:
                 ext = f.suffix.lower()
                 if ext == ".nes":

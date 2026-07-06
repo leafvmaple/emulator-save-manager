@@ -62,6 +62,9 @@ class DatGame:
     name: str
     """Full No-Intro name including region/revision tags."""
     platform: str = ""
+    size: int = 0
+    """Dump size in bytes (0 when the DAT omits it). CRC32 is only 32
+    bits — size is the second factor that makes a match trustworthy."""
 
 
 @dataclass
@@ -83,8 +86,8 @@ class DatIndex:
         return self.by_crc.get(crc32.upper())
 
 
-def parse_dat(dat_path: Path) -> tuple[str, dict[str, str], list[bytes]]:
-    """Parse one No-Intro DAT → ``(platform, {crc: name}, nes_headers)``.
+def parse_dat(dat_path: Path) -> tuple[str, dict[str, tuple[str, int]], list[bytes]]:
+    """Parse one No-Intro DAT → ``(platform, {crc: (name, size)}, nes_headers)``.
 
     ``[BIOS]`` entries are skipped.  Header attributes are only harvested
     from NES DATs (they are iNES container headers; other platforms'
@@ -98,7 +101,7 @@ def parse_dat(dat_path: Path) -> tuple[str, dict[str, str], list[bytes]]:
     if header_el is not None and header_el.text:
         platform = guess_platform(header_el.text) or platform
 
-    entries: dict[str, str] = {}
+    entries: dict[str, tuple[str, int]] = {}
     headers: set[bytes] = set()
 
     for game_el in root.iter("game"):
@@ -107,8 +110,12 @@ def parse_dat(dat_path: Path) -> tuple[str, dict[str, str], list[bytes]]:
             continue
         for rom_el in game_el.iter("rom"):
             crc32 = (rom_el.get("crc") or "").strip().upper()
+            try:
+                size = int(rom_el.get("size") or 0)
+            except ValueError:
+                size = 0
             if crc32 and crc32 not in entries:
-                entries[crc32] = game_name
+                entries[crc32] = (game_name, size)
             if platform == "NES":
                 raw_header = (rom_el.get("header") or "").replace(" ", "")
                 if raw_header:
@@ -124,7 +131,9 @@ def parse_dat(dat_path: Path) -> tuple[str, dict[str, str], list[bytes]]:
 
 # Per-file parse cache keyed by (path, mtime, size) — DATs are multi-MB
 # XML, no need to re-parse them on every library rescan in a session.
-_parse_cache: dict[str, tuple[float, int, tuple[str, dict[str, str], list[bytes]]]] = {}
+_parse_cache: dict[
+    str, tuple[float, int, tuple[str, dict[str, tuple[str, int]], list[bytes]]]
+] = {}
 
 
 def load_dat_index(dat_dir: Path) -> DatIndex:
@@ -155,8 +164,9 @@ def load_dat_index(dat_dir: Path) -> DatIndex:
             )
 
         index.sources.append(dat_path.name)
-        for crc, name in entries.items():
-            index.by_crc.setdefault(crc, DatGame(name=name, platform=platform))
+        for crc, (name, size) in entries.items():
+            index.by_crc.setdefault(
+                crc, DatGame(name=name, platform=platform, size=size))
         for hdr in headers:
             if hdr not in index.nes_headers:
                 index.nes_headers.append(hdr)
