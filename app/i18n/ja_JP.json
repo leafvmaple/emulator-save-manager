@@ -177,7 +177,12 @@
         "summary_repaired": " · ヘッダー修正 {repaired} 件（元ファイルは .bak として保存）",
         "status_derived": "派生版",
         "derived_tooltip": "ベース: {base}",
-        "summary_derived": " · 派生版 {derived} 件（翻訳/改造）"
+        "summary_derived": " · 派生版 {derived} 件（翻訳/改造）",
+        "status_custom": "カスタムDB",
+        "summary_custom": " · カスタムDB {custom} 件",
+        "export_skeleton": "未識別をドラフト",
+        "skeleton_done": "{file} にドラフト {count} 件を書き込みました。編集後に再スキャンしてください",
+        "skeleton_none": "ドラフト対象の未識別ROMはありません"
     },
     "conflict": {
         "title": "セーブ競合",

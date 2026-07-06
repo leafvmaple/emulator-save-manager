@@ -177,7 +177,12 @@
         "summary_repaired": " · {repaired} headers repaired (originals kept as .bak)",
         "status_derived": "Derived",
         "derived_tooltip": "Base game: {base}",
-        "summary_derived": " · {derived} derived (translations/hacks)"
+        "summary_derived": " · {derived} derived (translations/hacks)",
+        "status_custom": "Custom DB",
+        "summary_custom": " · {custom} in custom DB",
+        "export_skeleton": "Draft Unidentified",
+        "skeleton_done": "{count} draft entries written to {file} — edit and rescan to apply",
+        "skeleton_none": "No unidentified ROMs to draft"
     },
     "conflict": {
         "title": "Save Conflict",

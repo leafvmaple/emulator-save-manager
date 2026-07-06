@@ -32,6 +32,7 @@ from typing import Callable
 from loguru import logger
 
 from app.config import Config
+from app.core.custom_db import DB_FILENAME, load_custom_db
 from app.core.dat_index import DatGame, DatIndex, load_dat_index
 from app.core.rom_headers import parse_embedded_identity
 from app.models.game_save import GameSave
@@ -217,6 +218,9 @@ class RomFile:
     rom_title: str = ""
     """Embedded cartridge title (GB/GBA/NDS)."""
 
+    custom_name: str = ""
+    """Display name from the user-curated custom DB (games_custom.json)."""
+
     derived_from: str = ""
     """DAT name of the base game when this ROM misses the DAT but a
     verified library sibling shares its embedded identity (typical for
@@ -267,6 +271,11 @@ class RomLibraryReport:
         """ROMs identified as derived versions (translations / hacks)."""
         return sum(1 for r in self.roms if r.derived_from)
 
+    @property
+    def custom_count(self) -> int:
+        """ROMs identified through the user-curated custom DB."""
+        return sum(1 for r in self.roms if r.custom_name)
+
 
 class RomLibrary:
     """Scans configured ROM directories with a persistent hash cache."""
@@ -283,6 +292,10 @@ class RomLibrary:
     @property
     def dat_dir(self) -> Path:
         return self._cfg.dat_dir
+
+    @property
+    def custom_db_path(self) -> Path:
+        return self._cfg.data_dir / DB_FILENAME
 
     @property
     def _cache_path(self) -> Path:
@@ -326,6 +339,7 @@ class RomLibrary:
 
         dat = load_dat_index(self.dat_dir)
         self.dat_games = dat.game_count
+        custom = load_custom_db(self.custom_db_path)
 
         cache = self._load_cache()
         roms: list[RomFile] = []
@@ -400,6 +414,10 @@ class RomLibrary:
                     })
                     dirty = True
 
+            # User-curated identity for ROMs no DAT will ever match
+            # (translations, hacks, unlicensed originals).
+            custom_entry = custom.get(crc) if crc else None
+
             roms.append(RomFile(
                 path=f,
                 size=stat.st_size,
@@ -410,6 +428,8 @@ class RomLibrary:
                 repaired=repaired,
                 rom_id=rom_id,
                 rom_title=rom_title,
+                custom_name=custom_entry.name if custom_entry else "",
+                derived_from=custom_entry.base if custom_entry else "",
             ))
 
         if dirty:
@@ -528,8 +548,8 @@ def build_report(
             base_by_title.setdefault(
                 (rom.platform, rom.rom_title), rom.dat_name)
     for rom in roms:
-        if rom.dat_name:
-            continue
+        if rom.dat_name or rom.derived_from:
+            continue  # verified, or the custom DB already named the base
         base = ""
         if rom.rom_id:
             base = base_by_id.get((rom.platform, rom.rom_id), "")

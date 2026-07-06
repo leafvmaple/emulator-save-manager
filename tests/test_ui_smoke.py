@@ -117,7 +117,6 @@ def test_sync_page_updates_transfer_progress(qtbot, cfg):
     assert page._progress_bar.value() == 50
 
 
-
 def test_auto_backup_wiring(qtbot, cfg):
     from app.ui.main_window import MainWindow
 
@@ -163,6 +162,7 @@ def test_mainwindow_hides_to_tray_instead_of_closing(qtbot, cfg):
     w.closeEvent(event)
     assert not event.isAccepted()
     assert not w.isVisible()
+
 
 def test_home_first_run_onboarding_hides_after_scan(qtbot, cfg):
     from app.ui.pages.home_page import HomePage
@@ -399,8 +399,10 @@ def test_rom_page_scan_end_to_end(qtbot, cfg, tmp_path):
         GameSave("Snes9x", "Renamed Away", "Old Rom Name", platform="SNES"),
     ])
 
+    assert not page._skeleton_btn.isEnabled()  # needs a completed scan
     page._on_scan()
     qtbot.waitUntil(lambda: page._report is not None, timeout=5000)
+    assert page._skeleton_btn.isEnabled()
 
     assert page._table.rowCount() == 1
     assert page._table.item(0, 0).text() == "Chrono Trigger (USA).sfc"

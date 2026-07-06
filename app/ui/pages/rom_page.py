@@ -145,6 +145,11 @@ class RomPage(QWidget):
         self._scan_btn.clicked.connect(self._on_scan)
         action_bar.addWidget(self._scan_btn, 0, av)
 
+        self._skeleton_btn = PushButton(FIF.SAVE_AS, t("rom.export_skeleton"), self)
+        self._skeleton_btn.clicked.connect(self._on_export_skeleton)
+        self._skeleton_btn.setEnabled(False)  # needs a completed scan
+        action_bar.addWidget(self._skeleton_btn, 0, av)
+
         self._cancel_btn = PushButton(FIF.CLOSE, t("common.cancel"), self)
         self._cancel_btn.clicked.connect(self._on_cancel)
         self._cancel_btn.hide()
@@ -285,6 +290,29 @@ class RomPage(QWidget):
             self._cancel_btn.setEnabled(False)
             self._status_msg.setText(t("common.canceling"))
 
+    def _on_export_skeleton(self) -> None:
+        """Draft custom-DB entries for every unidentified scanned ROM."""
+        if self._report is None or self._config is None:
+            return
+        from app.core.custom_db import build_skeleton, merge_skeleton
+        from app.core.rom_library import RomLibrary
+
+        db_path = RomLibrary(self._config).custom_db_path
+        added = merge_skeleton(db_path, build_skeleton(self._report.roms))
+        if added:
+            InfoBar.success(
+                title=t("rom.export_skeleton"),
+                content=t("rom.skeleton_done",
+                          count=str(added), file=str(db_path)),
+                parent=self, position=InfoBarPosition.TOP, duration=8000,
+            )
+        else:
+            InfoBar.info(
+                title=t("rom.export_skeleton"),
+                content=t("rom.skeleton_none"),
+                parent=self, position=InfoBarPosition.TOP, duration=4000,
+            )
+
     def _on_progress(self, done: int, total: int) -> None:
         self._status_msg.setText(
             t("rom.hashing", done=str(done), total=str(total)))
@@ -309,10 +337,13 @@ class RomPage(QWidget):
         if report.repaired_count:
             summary += t("rom.summary_repaired",
                          repaired=str(report.repaired_count))
+        if report.custom_count:
+            summary += t("rom.summary_custom", custom=str(report.custom_count))
         if report.derived_count:
             summary += t("rom.summary_derived",
                          derived=str(report.derived_count))
         self._status_msg.setText(summary)
+        self._skeleton_btn.setEnabled(True)
         self._populate_table(report)
         self._populate_orphans(report)
 
@@ -345,6 +376,8 @@ class RomPage(QWidget):
                 status_parts.append(t("rom.status_repaired"))
             elif rom.dat_name:
                 status_parts.append(t("rom.status_verified"))
+            elif rom.custom_name:
+                status_parts.append(t("rom.status_custom"))
             elif rom.derived_from:
                 status_parts.append(t("rom.status_derived"))
             if rom.path in dup_paths:
@@ -364,6 +397,12 @@ class RomPage(QWidget):
             status_item = QTableWidgetItem(" · ".join(status_parts))
             if rom.dat_name:
                 status_item.setToolTip(rom.dat_name)
+            elif rom.custom_name and rom.derived_from:
+                status_item.setToolTip(
+                    rom.custom_name + "\n"
+                    + t("rom.derived_tooltip", base=rom.derived_from))
+            elif rom.custom_name:
+                status_item.setToolTip(rom.custom_name)
             elif rom.derived_from:
                 status_item.setToolTip(
                     t("rom.derived_tooltip", base=rom.derived_from))

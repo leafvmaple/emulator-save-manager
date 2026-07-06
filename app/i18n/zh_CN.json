@@ -177,7 +177,12 @@
         "summary_repaired": " · {repaired} 个头部已修正（原件已备份为 .bak）",
         "status_derived": "衍生版本",
         "derived_tooltip": "母本: {base}",
-        "summary_derived": " · {derived} 个衍生版本（汉化/改版）"
+        "summary_derived": " · {derived} 个衍生版本（汉化/改版）",
+        "status_custom": "自建库",
+        "summary_custom": " · {custom} 个自建库收录",
+        "export_skeleton": "导出未识别骨架",
+        "skeleton_done": "已写入 {count} 条骨架到 {file}，编辑补全后重新扫描即可生效",
+        "skeleton_none": "没有需要收录的未识别 ROM"
     },
     "conflict": {
         "title": "存档冲突",

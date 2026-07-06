@@ -53,10 +53,16 @@ DAT hash — are legitimate scan-time writes (original kept as a sibling
   files and backup keys (via the alias table) in the same transaction.
   Automatic safety backup before execution. The legacy `emulator-manager`
   `rename_engine.py` is prior art to port.
+- **Custom game DB** *(Status: shipped)*: `games_custom.json` in the data
+  dir keys identities by content CRC for ROMs no DAT will ever match
+  (translations, hacks, unlicensed originals); the "Draft Unidentified"
+  button seeds it from a scan, pre-filling name/lang/group/version parsed
+  from the scene filename convention plus the embedded title as a
+  base-game hint. Loads the legacy `emulator-manager` shape too.
+  Follow-up: in-app entry editor instead of hand-editing the JSON.
 - **Stage C — curation**: 1G1R region preference, per-platform archiving,
   interop with igir reports; mis-named detection against DAT canonical
-  names; custom DB for fan-translation identification (port
-  `games_custom.json` from `emulator-manager`).
+  names.
 
 ### Polish
 
