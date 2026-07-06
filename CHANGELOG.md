@@ -1,3 +1,33 @@
+# v1.1.0
+
+Released on 2026-07-06
+
+## ✨ Features
+
+- feat(rom): sort-to-library workflow (`7b56bd9`)
+- feat(rom): archive container support (zip / 7z / RAR) (`4d278b7`)
+- feat(rom): save-aware rename engine (Stage B) (`a57ed5d`)
+- feat(rom): custom game DB for translations, hacks and unlicensed originals (`cc76000`)
+- feat(sync): streaming transfers with per-file progress (`a9a5135`)
+- feat(rom): zip-internal header repair and derived-version detection (`d0507c3`)
+- feat(rom): DAT verification and convergent NES header repair (`2aa9bb9`)
+- feat(rom): add read-only ROM library page (Stage A) (`72e59b8`)
+- feat(backup): migrate backup chains across game-id renames (`e226093`)
+- feat(ui): add tray background mode (`4de5a78`)
+- feat(backup): add headless auto backup guard (`7a09a91`)
+
+## 🐛 Bug Fixes
+
+- fix(rom): require platform and size to confirm a repair match (`22df308`)
+- fix(settings): only persist WebDAV password after a real edit (`407f011`)
+- fix(ui): elide long save names (`882427e`)
+
+## 📦 Other Changes
+
+- docs: expand ROADMAP with save-identity P1 and staged ROM library plan (`699bb9b`)
+
+---
+
 # v1.0.2
 
 Released on 2026-06-18
