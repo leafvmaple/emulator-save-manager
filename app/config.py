@@ -37,6 +37,7 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "webdav_url": "",
     "webdav_username": "",
     "webdav_base_path": "",
+    "rom_dirs": [],
 }
 
 
@@ -134,6 +135,12 @@ class Config:
     @property
     def webdav_base_path(self) -> str:
         return self._data.get("webdav_base_path", "")
+
+    @property
+    def rom_dirs(self) -> list[str]:
+        """User-configured ROM library directories (scanned recursively)."""
+        dirs = self._data.get("rom_dirs", [])
+        return [str(d) for d in dirs] if isinstance(dirs, list) else []
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)

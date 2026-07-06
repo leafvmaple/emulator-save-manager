@@ -15,6 +15,7 @@
         "backup": "备份",
         "restore": "还原",
         "sync": "同步",
+        "roms": "ROM 库",
         "settings": "设置"
     },
     "home": {
@@ -146,6 +147,27 @@
         "conflict_found": "发现 {count} 个冲突",
         "crc32_mismatch_title": "游戏版本不一致",
         "crc32_mismatch_desc": "本地与远端的游戏 CRC32 校验值不同，可能是不同版本的游戏光盘，存档可能不兼容。是否要强制覆盖？"
+    },
+    "rom": {
+        "title": "ROM 库",
+        "description": "扫描 ROM 目录，检测重复文件并关联游戏存档（只读，不会移动或修改任何文件）",
+        "dirs_title": "ROM 目录",
+        "add_dir": "添加目录",
+        "no_dirs": "尚未配置 ROM 目录，点击「添加目录」开始",
+        "scan": "扫描 ROM 库",
+        "scanning": "正在扫描 ROM…",
+        "hashing": "正在计算校验和 {done}/{total}",
+        "scan_complete": "扫描完成",
+        "summary": "共 {count} 个 ROM · {platforms} 个平台 · {dups} 个重复文件 · {orphans} 个存档缺少 ROM",
+        "col_name": "文件名",
+        "col_platform": "平台",
+        "col_size": "大小",
+        "col_crc": "CRC32",
+        "col_status": "状态",
+        "status_linked": "已关联存档",
+        "status_dup": "重复",
+        "orphan_saves_title": "缺少 ROM 的存档",
+        "orphan_saves_hint": "以下存档在 ROM 库中找不到同名 ROM，可能已被重命名或移动。重命名 ROM 会让模拟器和备份链找不到存档，请谨慎操作。"
     },
     "conflict": {
         "title": "存档冲突",

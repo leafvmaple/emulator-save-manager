@@ -15,6 +15,7 @@
         "backup": "Backup",
         "restore": "Restore",
         "sync": "Sync",
+        "roms": "ROM Library",
         "settings": "Settings"
     },
     "home": {
@@ -146,6 +147,27 @@
         "conflict_found": "{count} conflicts found",
         "crc32_mismatch_title": "Game version mismatch",
         "crc32_mismatch_desc": "Local and remote CRC32 checksums differ — the game disc versions may be different and saves may be incompatible. Force overwrite?"
+    },
+    "rom": {
+        "title": "ROM Library",
+        "description": "Scan ROM directories, detect duplicate dumps and link them to game saves (read-only — nothing is moved or modified)",
+        "dirs_title": "ROM Directories",
+        "add_dir": "Add Directory",
+        "no_dirs": "No ROM directories configured yet — click “Add Directory” to begin",
+        "scan": "Scan Library",
+        "scanning": "Scanning ROMs…",
+        "hashing": "Hashing {done}/{total}",
+        "scan_complete": "Scan complete",
+        "summary": "{count} ROMs · {platforms} platforms · {dups} duplicate files · {orphans} saves missing a ROM",
+        "col_name": "Filename",
+        "col_platform": "Platform",
+        "col_size": "Size",
+        "col_crc": "CRC32",
+        "col_status": "Status",
+        "status_linked": "Save linked",
+        "status_dup": "Duplicate",
+        "orphan_saves_title": "Saves without ROMs",
+        "orphan_saves_hint": "These saves have no matching ROM in the library — the ROM may have been renamed or moved. Renaming a ROM orphans the emulator's save and this app's backup chain."
     },
     "conflict": {
         "title": "Save Conflict",

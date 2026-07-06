@@ -15,6 +15,7 @@
         "backup": "バックアップ",
         "restore": "復元",
         "sync": "同期",
+        "roms": "ROMライブラリ",
         "settings": "設定"
     },
     "home": {
@@ -146,6 +147,27 @@
         "conflict_found": "{count} 件の競合が見つかりました",
         "crc32_mismatch_title": "ゲームバージョンが不一致",
         "crc32_mismatch_desc": "ローカルとリモートのCRC32チェックサムが異なります。ディスクバージョンが異なる可能性があり、セーブデータに互換性がない場合があります。強制上書きしますか？"
+    },
+    "rom": {
+        "title": "ROMライブラリ",
+        "description": "ROMフォルダをスキャンし、重複ファイルの検出とセーブデータの関連付けを行います（読み取り専用・ファイルは変更されません）",
+        "dirs_title": "ROMフォルダ",
+        "add_dir": "フォルダを追加",
+        "no_dirs": "ROMフォルダが未設定です。「フォルダを追加」から始めてください",
+        "scan": "ライブラリをスキャン",
+        "scanning": "ROMをスキャン中…",
+        "hashing": "ハッシュ計算中 {done}/{total}",
+        "scan_complete": "スキャン完了",
+        "summary": "ROM {count} 件 · {platforms} プラットフォーム · 重複 {dups} 件 · ROM不明のセーブ {orphans} 件",
+        "col_name": "ファイル名",
+        "col_platform": "プラットフォーム",
+        "col_size": "サイズ",
+        "col_crc": "CRC32",
+        "col_status": "状態",
+        "status_linked": "セーブあり",
+        "status_dup": "重複",
+        "orphan_saves_title": "ROMが見つからないセーブ",
+        "orphan_saves_hint": "以下のセーブに対応するROMがライブラリに見つかりません。ROMの名前変更や移動が原因の可能性があります。ROMの改名はエミュレータのセーブとバックアップ履歴を孤立させるため注意してください。"
     },
     "conflict": {
         "title": "セーブ競合",

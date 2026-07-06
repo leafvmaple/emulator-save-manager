@@ -28,9 +28,9 @@ def test_mainwindow_constructs(qtbot, cfg):
     # Stage-0 public entry points exist.
     assert hasattr(w.scan_page, "start_scan")
     assert hasattr(w.sync_page, "start_sync")
-    # All five pages are present.
+    # All pages are present.
     for page in ("scan_page", "backup_page", "restore_page",
-                 "sync_page", "settings_page"):
+                 "sync_page", "rom_page", "settings_page"):
         assert getattr(w, page) is not None
 
 
@@ -184,8 +184,9 @@ def test_cancel_buttons_present(qtbot, cfg):
     from app.ui.pages.scan_page import ScanPage
     from app.ui.pages.backup_page import BackupPage
     from app.ui.pages.sync_page import SyncPage
+    from app.ui.pages.rom_page import RomPage
 
-    for page_cls in (ScanPage, BackupPage, SyncPage):
+    for page_cls in (ScanPage, BackupPage, SyncPage, RomPage):
         page = page_cls()
         qtbot.addWidget(page)
         assert hasattr(page, "_cancel_btn")
@@ -328,6 +329,47 @@ def test_live_theme_switch_rebuilds_cards(qtbot, cfg):
     assert after is not before  # the card was rebuilt by the theme switch
 
     setTheme(Theme.LIGHT)  # restore global theme for other tests
+
+
+def test_rom_page_scan_end_to_end(qtbot, cfg, tmp_path):
+    """The ROM page's worker scans, fills the table and flags orphan saves."""
+    from app.ui.pages.rom_page import RomPage
+    from app.models.game_save import GameSave
+
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    (roms_dir / "Chrono Trigger (USA).sfc").write_bytes(b"CT")
+    cfg.set("rom_dirs", [str(roms_dir)])
+
+    page = RomPage()
+    qtbot.addWidget(page)
+    page.set_config(cfg)
+    page.update_saves([
+        GameSave("Snes9x", "Chrono Trigger", "Chrono Trigger (USA)",
+                 platform="SNES"),
+        GameSave("Snes9x", "Renamed Away", "Old Rom Name", platform="SNES"),
+    ])
+
+    page._on_scan()
+    qtbot.waitUntil(lambda: page._report is not None, timeout=5000)
+
+    assert page._table.rowCount() == 1
+    assert page._table.item(0, 0).text() == "Chrono Trigger (USA).sfc"
+    # The linked save shows in the status column…
+    assert page._table.item(0, 4).text()
+    # …and the save whose ROM is missing surfaces in the orphan section.
+    assert not page._orphan_title.isHidden()
+    assert "Renamed Away" in page._orphan_body.text()
+
+
+def test_rom_page_scan_without_dirs_warns(qtbot, cfg):
+    from app.ui.pages.rom_page import RomPage
+
+    page = RomPage()
+    qtbot.addWidget(page)
+    page.set_config(cfg)
+    page._on_scan()  # no dirs configured → InfoBar warning, no worker
+    assert page._worker is None
 
 
 def test_diff_dialog_builds(qtbot, cfg, make_game_save, tmp_path):

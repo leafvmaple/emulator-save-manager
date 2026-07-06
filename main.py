@@ -80,11 +80,13 @@ def main() -> None:
     window.restore_page.set_icon_provider(icon_provider)
     window.sync_page.set_sync_manager(sync_mgr)
     window.sync_page.set_config(config)
+    window.rom_page.set_config(config)
     window.settings_page.set_config(config)
     window.settings_page.set_plugin_manager(pm)
 
-    # Connect scan → backup page
+    # Connect scan → backup / ROM-library pages
     window.scan_page.saves_updated.connect(window.backup_page.update_saves)
+    window.scan_page.saves_updated.connect(window.rom_page.update_saves)
 
     # Restore the previous session's scan so the UI isn't empty on launch.
     window.scan_page.load_cache()

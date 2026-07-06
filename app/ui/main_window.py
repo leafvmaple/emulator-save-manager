@@ -24,6 +24,7 @@ from app.ui.pages.scan_page import ScanPage
 from app.ui.pages.backup_page import BackupPage
 from app.ui.pages.restore_page import RestorePage
 from app.ui.pages.sync_page import SyncPage
+from app.ui.pages.rom_page import RomPage
 from app.ui.pages.settings_page import SettingsPage
 
 
@@ -85,6 +86,7 @@ class MainWindow(FluentWindow):
         self.backup_page = BackupPage(self)
         self.restore_page = RestorePage(self)
         self.sync_page = SyncPage(self)
+        self.rom_page = RomPage(self)
         self.settings_page = SettingsPage(self)
 
         # Add to navigation — Home first, and the default landing page.
@@ -93,6 +95,7 @@ class MainWindow(FluentWindow):
         self.addSubInterface(self.backup_page, FIF.SAVE, t("nav.backup"))
         self.addSubInterface(self.restore_page, FIF.HISTORY, t("nav.restore"))
         self.addSubInterface(self.sync_page, FIF.SYNC, t("nav.sync"))
+        self.addSubInterface(self.rom_page, FIF.GAME, t("nav.roms"))
         self.addSubInterface(
             self.settings_page,
             FIF.SETTING,
@@ -116,6 +119,7 @@ class MainWindow(FluentWindow):
             "backup": self.backup_page,
             "restore": self.restore_page,
             "sync": self.sync_page,
+            "roms": self.rom_page,
             "settings": self.settings_page,
         }.get(key)
         if page is not None:
@@ -149,7 +153,7 @@ class MainWindow(FluentWindow):
         """Re-style custom-painted widgets after a runtime theme change."""
         self._apply_system_accent()
         for page in (self.home_page, self.scan_page, self.backup_page,
-                     self.restore_page, self.sync_page):
+                     self.restore_page, self.sync_page, self.rom_page):
             page.restyle()
 
     # ------------------------------------------------------------------
