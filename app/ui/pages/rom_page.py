@@ -62,7 +62,9 @@ class _RomScanWorker(QThread):
                 should_cancel=self.isInterruptionRequested,
                 progress=self.progressed.emit,
             )
-            self.finished.emit(build_report(roms, self._saves))
+            self.finished.emit(
+                build_report(roms, self._saves,
+                             dat_games=self._library.dat_games))
         except Exception as e:
             self.error.emit(str(e))
 
@@ -295,13 +297,19 @@ class RomPage(QWidget):
         self._progress.hide()
 
         platforms = {r.platform for r in report.roms}
-        self._status_msg.setText(t(
+        summary = t(
             "rom.summary",
             count=str(len(report.roms)),
             platforms=str(len(platforms)),
             dups=str(report.duplicate_count),
             orphans=str(len(report.saves_without_roms)),
-        ))
+        )
+        if report.dat_games:
+            summary += t("rom.summary_dat", verified=str(report.verified_count))
+        if report.repaired_count:
+            summary += t("rom.summary_repaired",
+                         repaired=str(report.repaired_count))
+        self._status_msg.setText(summary)
         self._populate_table(report)
         self._populate_orphans(report)
 
@@ -330,6 +338,10 @@ class RomPage(QWidget):
         self._table.setRowCount(len(roms))
         for row, rom in enumerate(roms):
             status_parts = []
+            if rom.repaired:
+                status_parts.append(t("rom.status_repaired"))
+            elif rom.dat_name:
+                status_parts.append(t("rom.status_verified"))
             if rom.path in dup_paths:
                 status_parts.append(t("rom.status_dup"))
             if rom.path in report.matched:
@@ -344,7 +356,10 @@ class RomPage(QWidget):
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self._table.setItem(row, 2, size_item)
             self._table.setItem(row, 3, QTableWidgetItem(rom.crc32 or "—"))
-            self._table.setItem(row, 4, QTableWidgetItem(" · ".join(status_parts)))
+            status_item = QTableWidgetItem(" · ".join(status_parts))
+            if rom.dat_name:
+                status_item.setToolTip(rom.dat_name)
+            self._table.setItem(row, 4, status_item)
         self._table.show()
 
     def _populate_orphans(self, report: RomLibraryReport) -> None:

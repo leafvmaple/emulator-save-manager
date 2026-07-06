@@ -167,7 +167,11 @@
         "status_linked": "已关联存档",
         "status_dup": "重复",
         "orphan_saves_title": "缺少 ROM 的存档",
-        "orphan_saves_hint": "以下存档在 ROM 库中找不到同名 ROM，可能已被重命名或移动。重命名 ROM 会让模拟器和备份链找不到存档，请谨慎操作。"
+        "orphan_saves_hint": "以下存档在 ROM 库中找不到同名 ROM，可能已被重命名或移动。重命名 ROM 会让模拟器和备份链找不到存档，请谨慎操作。",
+        "status_verified": "命中 DAT",
+        "status_repaired": "头部已修正",
+        "summary_dat": " · {verified} 个命中 DAT",
+        "summary_repaired": " · {repaired} 个头部已修正（原件已备份为 .bak）"
     },
     "conflict": {
         "title": "存档冲突",

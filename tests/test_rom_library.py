@@ -154,3 +154,109 @@ def test_report_links_roms_to_filename_keyed_saves(cfg, tmp_path):
 def test_missing_rom_dir_is_tolerated(cfg, tmp_path):
     roms = _library(cfg, tmp_path / "does-not-exist").scan()
     assert roms == []
+
+
+# ----------------------------------------------------------------------
+# DAT verification + convergent NES header repair
+# ----------------------------------------------------------------------
+
+_CANON_HEADER = bytes.fromhex("4E45531A020101000000000000000000")
+_WRONG_HEADER = bytes.fromhex("4E45531A08010100000000000000000A")
+
+
+def _write_nes_dat(cfg, body: bytes) -> str:
+    """Register `_CANON_HEADER + body` in a DAT under the default dat_dir."""
+    good_crc = _crc(_CANON_HEADER + body)
+    dat_dir = cfg.data_dir / "dat"
+    dat_dir.mkdir(parents=True, exist_ok=True)
+    (dat_dir / "nes.dat").write_text(
+        '<?xml version="1.0"?>\n<datafile>'
+        "<header><name>Nintendo - Nintendo Entertainment System (Headered)"
+        "</name></header>"
+        f'<game name="Test Game (USA)"><rom name="Test Game (USA).nes" '
+        f'crc="{good_crc}" header="{_CANON_HEADER.hex().upper()}"/></game>'
+        "</datafile>",
+        encoding="utf-8",
+    )
+    return good_crc
+
+
+def test_dat_verification_marks_canonical_dump(cfg, tmp_path):
+    body = b"PRG" * 1000
+    good_crc = _write_nes_dat(cfg, body)
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    (roms_dir / "Test Game (USA).nes").write_bytes(_CANON_HEADER + body)
+
+    lib = _library(cfg, roms_dir)
+    roms = lib.scan()
+    assert lib.dat_games == 1
+    assert roms[0].crc32 == good_crc
+    assert roms[0].dat_name == "Test Game (USA)"
+    assert roms[0].repaired is False
+
+    from app.core.rom_library import build_report
+    report = build_report(roms, [], dat_games=lib.dat_games)
+    assert report.verified_count == 1
+    assert report.repaired_count == 0
+
+
+def test_nes_header_repair_end_to_end(cfg, tmp_path):
+    body = b"PRG" * 1000
+    good_crc = _write_nes_dat(cfg, body)
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    rom = roms_dir / "test game.nes"
+    original = _WRONG_HEADER + body
+    rom.write_bytes(original)
+
+    lib = _library(cfg, roms_dir)
+    roms = lib.scan()
+
+    # File converged to the canonical dump, byte for byte.
+    assert rom.read_bytes() == _CANON_HEADER + body
+    assert roms[0].crc32 == good_crc
+    assert roms[0].repaired is True
+    assert roms[0].dat_name == "Test Game (USA)"
+    # Pristine original preserved next to it.
+    bak = roms_dir / "test game.nes.bak"
+    assert bak.read_bytes() == original
+
+    # Rescan: direct DAT hit from cache, no second repair, .bak untouched.
+    roms2 = lib.scan()
+    assert roms2[0].repaired is False
+    assert roms2[0].dat_name == "Test Game (USA)"
+    assert bak.read_bytes() == original
+    # The .bak sibling is never picked up as a library entry.
+    assert len(roms2) == 1
+
+
+def test_repair_never_overwrites_existing_bak(cfg, tmp_path):
+    body = b"PRG" * 1000
+    _write_nes_dat(cfg, body)
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    rom = roms_dir / "game.nes"
+    rom.write_bytes(_WRONG_HEADER + body)
+    sentinel = b"PRISTINE-FIRST-BACKUP"
+    (roms_dir / "game.nes.bak").write_bytes(sentinel)
+
+    _library(cfg, roms_dir).scan()
+    # First backup wins — repair must not clobber it.
+    assert (roms_dir / "game.nes.bak").read_bytes() == sentinel
+    assert rom.read_bytes() == _CANON_HEADER + body
+
+
+def test_unmatched_nes_file_is_left_untouched(cfg, tmp_path):
+    _write_nes_dat(cfg, b"PRG" * 1000)
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    rom = roms_dir / "homebrew.nes"
+    content = _WRONG_HEADER + b"COMPLETELY-DIFFERENT-BODY"
+    rom.write_bytes(content)
+
+    roms = _library(cfg, roms_dir).scan()
+    assert rom.read_bytes() == content
+    assert not (roms_dir / "homebrew.nes.bak").exists()
+    assert roms[0].dat_name == ""
+    assert roms[0].repaired is False

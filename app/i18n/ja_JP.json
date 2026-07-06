@@ -167,7 +167,11 @@
         "status_linked": "セーブあり",
         "status_dup": "重複",
         "orphan_saves_title": "ROMが見つからないセーブ",
-        "orphan_saves_hint": "以下のセーブに対応するROMがライブラリに見つかりません。ROMの名前変更や移動が原因の可能性があります。ROMの改名はエミュレータのセーブとバックアップ履歴を孤立させるため注意してください。"
+        "orphan_saves_hint": "以下のセーブに対応するROMがライブラリに見つかりません。ROMの名前変更や移動が原因の可能性があります。ROMの改名はエミュレータのセーブとバックアップ履歴を孤立させるため注意してください。",
+        "status_verified": "DAT一致",
+        "status_repaired": "ヘッダー修正済み",
+        "summary_dat": " · DAT一致 {verified} 件",
+        "summary_repaired": " · ヘッダー修正 {repaired} 件（元ファイルは .bak として保存）"
     },
     "conflict": {
         "title": "セーブ競合",

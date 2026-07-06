@@ -27,17 +27,31 @@ The differentiator vs. generic ROM managers (igir, RomVault, ClrMamePro):
 this app knows every emulator's save-naming convention, so it can eventually
 rename ROMs **and** migrate saves + backup keys in lockstep.
 
-- **Stage A — read-only library view** *(Status: shipped — see CHANGELOG)*:
+Write policy: scanning never moves, renames or deletes files, but
+*convergent repairs* — edits whose result lands exactly on a known-good
+DAT hash — are legitimate scan-time writes (original kept as a sibling
+`.bak`, first write wins; replacement is atomic).
+
+- **Stage A — library view** *(Status: shipped — see CHANGELOG)*:
   configure ROM directories, scan + CRC32-hash files (mtime/size cache),
   detect duplicates by content hash, link ROMs ↔ scanned saves by filename
   stem, and report ROMs without saves / saves without ROMs.
+- **DAT verification + convergent NES header repair** *(Status: shipped)*:
+  No-Intro DATs dropped into `<data_dir>/dat` (config `dat_dir`) verify
+  CRCs against canonical names; a bare `.nes` miss is re-tried with every
+  header seen in the headered DAT and fixed in place on a hit (ported from
+  the proven `emulator-manager` matcher). Follow-ups: propagate repairs
+  into `.zip` archives; GB/GBA/NDS header parsers so fan translations are
+  detected as "derived from X" (header ID matches, CRC doesn't).
 - **Stage B — save-aware normalization**: rename ROMs to a canonical
   convention (No-Intro style) with a dry-run preview, migrating emulator save
   files and backup keys (via the alias table) in the same transaction.
-  Automatic safety backup before execution.
+  Automatic safety backup before execution. The legacy `emulator-manager`
+  `rename_engine.py` is prior art to port.
 - **Stage C — curation**: 1G1R region preference, per-platform archiving,
-  interop with igir reports; DAT-file (No-Intro/Redump) matching for
-  bad-dump / mis-named detection.
+  interop with igir reports; mis-named detection against DAT canonical
+  names; custom DB for fan-translation identification (port
+  `games_custom.json` from `emulator-manager`).
 
 ### Polish
 

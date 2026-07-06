@@ -167,7 +167,11 @@
         "status_linked": "Save linked",
         "status_dup": "Duplicate",
         "orphan_saves_title": "Saves without ROMs",
-        "orphan_saves_hint": "These saves have no matching ROM in the library — the ROM may have been renamed or moved. Renaming a ROM orphans the emulator's save and this app's backup chain."
+        "orphan_saves_hint": "These saves have no matching ROM in the library — the ROM may have been renamed or moved. Renaming a ROM orphans the emulator's save and this app's backup chain.",
+        "status_verified": "DAT verified",
+        "status_repaired": "Header repaired",
+        "summary_dat": " · {verified} DAT matches",
+        "summary_repaired": " · {repaired} headers repaired (originals kept as .bak)"
     },
     "conflict": {
         "title": "Save Conflict",

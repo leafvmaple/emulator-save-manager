@@ -38,6 +38,7 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "webdav_username": "",
     "webdav_base_path": "",
     "rom_dirs": [],
+    "dat_dir": "",
 }
 
 
@@ -141,6 +142,12 @@ class Config:
         """User-configured ROM library directories (scanned recursively)."""
         dirs = self._data.get("rom_dirs", [])
         return [str(d) for d in dirs] if isinstance(dirs, list) else []
+
+    @property
+    def dat_dir(self) -> Path:
+        """Directory holding No-Intro .dat files for ROM verification."""
+        p = self._data.get("dat_dir", "")
+        return Path(p) if p else self._data_dir / "dat"
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)

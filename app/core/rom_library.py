@@ -1,11 +1,19 @@
-"""Read-only ROM library scanner (roadmap ROM Stage A).
+"""ROM library scanner (roadmap ROM Stage A + DAT verification).
 
 Scans user-configured ROM directories, hashes each file with CRC32
 (the checksum No-Intro DATs key on) behind an mtime/size cache, groups
-duplicate dumps by content, and links ROMs to scanned saves by filename
-stem — the same key the cartridge-family plugins use as ``game_id``.
+duplicate dumps by content, verifies CRCs against the loaded DAT index
+and links ROMs to scanned saves by filename stem — the same key the
+cartridge-family plugins use as ``game_id``.
 
-Strictly read-only: nothing here moves, renames or deletes a file.
+Write policy: the scan never moves, renames or deletes a file, but
+*convergent repairs* are allowed — edits whose result lands exactly on
+a known-good DAT hash.  Concretely: a ``.nes`` file whose CRC misses
+the DAT is re-tried with every header seen in the headered NES DAT
+(iNES 1.0 / NES 2.0 container differences), and on a hit the header is
+fixed in place — original preserved as a sibling ``.bak`` (first write
+wins), new content written atomically.  The rewrite is self-verifying:
+it only happens when ``known_header + body`` hashes to a DAT entry.
 The save-aware rename/normalize work is Stage B (see ROADMAP.md).
 """
 
@@ -13,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import zipfile
 import zlib
 from dataclasses import dataclass, field
@@ -23,6 +32,7 @@ from typing import Callable
 from loguru import logger
 
 from app.config import Config
+from app.core.dat_index import DatGame, DatIndex, load_dat_index
 from app.models.game_save import GameSave
 
 CACHE_VERSION = 1
@@ -69,6 +79,52 @@ ROM_EXTENSIONS: dict[str, str] = {
 FILENAME_KEYED_EMULATORS = frozenset({"Snes9x", "Mesen", "melonDS", "RetroArch"})
 
 _HASH_CHUNK = 1024 * 1024
+_NES_MAGIC = b"NES\x1a"
+_REPAIR_MAX_SIZE = 32 * 1024 * 1024
+
+
+def _repair_nes_header(path: Path, dat: DatIndex) -> tuple[str, DatGame] | None:
+    """Try every known iNES header against *path*; fix in place on a DAT hit.
+
+    Self-verifying: the file is only rewritten when ``known_header +
+    body`` hashes to a DAT entry, so the result is byte-identical to the
+    canonical dump.  The original is preserved once as a sibling
+    ``<name>.nes.bak`` — never overwritten, so it always holds the
+    pristine pre-repair file — and the fix lands via an atomic replace.
+
+    Returns ``(crc32, DatGame)`` on success, ``None`` otherwise.
+    """
+    try:
+        size = path.stat().st_size
+        if size > _REPAIR_MAX_SIZE or size < 16:
+            return None
+        data = path.read_bytes()
+    except OSError:
+        return None
+    if data[:4] != _NES_MAGIC:
+        return None
+
+    body = data[16:]
+    for hdr in dat.nes_headers:
+        crc = zlib.crc32(hdr + body) & 0xFFFFFFFF
+        crc_str = f"{crc:08X}"
+        game = dat.by_crc.get(crc_str)
+        if game is None:
+            continue
+        try:
+            bak = path.with_suffix(path.suffix + ".bak")
+            if not bak.exists():
+                shutil.copy2(path, bak)
+            tmp = path.with_suffix(path.suffix + ".repair-tmp")
+            tmp.write_bytes(hdr + body)
+            os.replace(tmp, path)
+        except OSError as e:
+            logger.error("Header repair failed for {}: {}", path, e)
+            return None
+        logger.info(
+            "Repaired iNES header: {} → {} ({})", path.name, crc_str, game.name)
+        return crc_str, game
+    return None
 
 
 @dataclass
@@ -83,6 +139,13 @@ class RomFile:
     """CRC32 of the ROM content (upper-case hex, '' when unhashable).
     For ``.zip`` archives this is the inner ROM's CRC from the central
     directory — the value No-Intro DATs record — not the archive's."""
+
+    dat_name: str = ""
+    """Canonical No-Intro name when the CRC matches the DAT index."""
+
+    repaired: bool = False
+    """True when this scan fixed the file's header to the DAT-canonical
+    one (original kept as a sibling ``.bak``)."""
 
     @property
     def stem(self) -> str:
@@ -102,6 +165,9 @@ class RomLibraryReport:
     saves_without_roms: list[GameSave] = field(default_factory=list)
     """Filename-keyed saves with no ROM in the library (moved/renamed?)."""
 
+    dat_games: int = 0
+    """Number of entries in the loaded DAT index (0 = no DATs)."""
+
     @property
     def roms_without_saves(self) -> list[RomFile]:
         return [r for r in self.roms if r.path not in self.matched]
@@ -111,16 +177,32 @@ class RomLibraryReport:
         """Number of redundant files (each group counts size-1)."""
         return sum(len(g) - 1 for g in self.duplicate_groups)
 
+    @property
+    def verified_count(self) -> int:
+        """ROMs whose CRC matched a DAT entry (incl. repaired ones)."""
+        return sum(1 for r in self.roms if r.dat_name)
+
+    @property
+    def repaired_count(self) -> int:
+        """ROMs whose header this scan fixed to the DAT-canonical one."""
+        return sum(1 for r in self.roms if r.repaired)
+
 
 class RomLibrary:
     """Scans configured ROM directories with a persistent hash cache."""
 
     def __init__(self, config: Config) -> None:
         self._cfg = config
+        self.dat_games = 0
+        """DAT index size seen by the most recent scan()."""
 
     @property
     def rom_dirs(self) -> list[Path]:
         return [Path(p) for p in self._cfg.rom_dirs if p]
+
+    @property
+    def dat_dir(self) -> Path:
+        return self._cfg.dat_dir
 
     @property
     def _cache_path(self) -> Path:
@@ -162,6 +244,9 @@ class RomLibrary:
                 seen.add(resolved)
                 candidates.append(f)
 
+        dat = load_dat_index(self.dat_dir)
+        self.dat_games = dat.game_count
+
         cache = self._load_cache()
         roms: list[RomFile] = []
         dirty = False
@@ -196,12 +281,40 @@ class RomLibrary:
                 }
                 dirty = True
 
+            # DAT verification; on a miss, try a convergent header repair
+            # for bare .nes files (iNES 1.0 / NES 2.0 header variance).
+            repaired = False
+            game = dat.lookup(crc)
+            if (
+                game is None
+                and crc
+                and dat.nes_headers
+                and f.suffix.lower() == ".nes"
+            ):
+                fixed = _repair_nes_header(f, dat)
+                if fixed is not None:
+                    crc, game = fixed
+                    repaired = True
+                    try:
+                        stat = f.stat()
+                    except OSError:
+                        pass
+                    cache[key] = {
+                        "size": stat.st_size,
+                        "mtime": int(stat.st_mtime),
+                        "crc32": crc,
+                        "platform": platform,
+                    }
+                    dirty = True
+
             roms.append(RomFile(
                 path=f,
                 size=stat.st_size,
                 modified=datetime.fromtimestamp(stat.st_mtime),
                 platform=platform,
                 crc32=crc,
+                dat_name=game.name if game else "",
+                repaired=repaired,
             ))
 
         if dirty:
@@ -288,6 +401,7 @@ class RomLibrary:
 def build_report(
     roms: list[RomFile],
     saves: list[GameSave],
+    dat_games: int = 0,
 ) -> RomLibraryReport:
     """Cross-reference a ROM scan with the current save scan.
 
@@ -295,7 +409,7 @@ def build_report(
     ROM filename stem against ``game_id`` (case-insensitive) for the
     filename-keyed emulators only.
     """
-    report = RomLibraryReport(roms=list(roms))
+    report = RomLibraryReport(roms=list(roms), dat_games=dat_games)
 
     by_crc: dict[str, list[RomFile]] = {}
     for rom in roms:
