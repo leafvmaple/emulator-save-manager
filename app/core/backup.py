@@ -8,12 +8,21 @@ Each backup produces a pair of files:
 The ZIP groups **all** selected saves for one game (save states, memory
 cards, folder memory cards, etc.) into a single archive so that sync only
 needs to copy one file.
+
+Game-id aliases
+~~~~~~~~~~~~~~~
+Cartridge-family plugins derive ``game_id`` from the ROM filename, so
+renaming a ROM would orphan its backup chain.  ``rename_game()`` migrates
+the chain and records the old id in ``{backup_root}/aliases.json``; every
+lookup resolves aliases first, so stale references (old scan results,
+sync records) keep finding the moved backups.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -199,6 +208,139 @@ class BackupManager:
     def backup_root(self) -> Path:
         return self._cfg.backup_path
 
+    # ------------------------------------------------------------------
+    # Game-id aliases (rename migration)
+    # ------------------------------------------------------------------
+
+    @property
+    def _aliases_path(self) -> Path:
+        return self.backup_root / "aliases.json"
+
+    def _load_aliases(self) -> dict[str, str]:
+        """Load the ``emulator:old_id -> new_id`` alias table."""
+        path = self._aliases_path
+        if not path.exists():
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return {str(k): str(v) for k, v in data.items()}
+        except Exception as e:
+            logger.warning("Failed to load backup aliases {}: {}", path, e)
+        return {}
+
+    def _save_aliases(self, aliases: dict[str, str]) -> None:
+        """Persist the alias table atomically (temp file + replace)."""
+        path = self._aliases_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(aliases, f, indent=4, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, path)
+        except Exception as e:
+            logger.error("Failed to save backup aliases: {}", e)
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except OSError:
+                pass
+
+    def resolve_game_id(self, emulator: str, game_id: str) -> str:
+        """Return the canonical game id, following recorded rename aliases.
+
+        Alias values are kept canonical by :meth:`rename_game`, so this is
+        normally a single hop; the visited-set guards against a corrupt
+        table introducing a cycle.
+        """
+        aliases = self._load_aliases()
+        current = game_id
+        visited = {current}
+        while f"{emulator}:{current}" in aliases:
+            nxt = aliases[f"{emulator}:{current}"]
+            if nxt in visited:
+                logger.warning(
+                    "Alias cycle detected for {}:{} — using {}",
+                    emulator, game_id, current,
+                )
+                break
+            current = nxt
+            visited.add(current)
+        return current
+
+    def rename_game(self, emulator: str, old_id: str, new_id: str) -> int:
+        """Migrate a game's backup chain to a new ``game_id``.
+
+        Moves ``{backup_root}/{emulator}/{old_id}`` to ``…/{new_id}``
+        (merging into an existing target directory), rewrites the
+        ``game_id`` in each sidecar JSON, and records ``old_id -> new_id``
+        in the alias table so stale references keep resolving.
+
+        Returns the number of backup versions migrated.
+        """
+        old_id = self.resolve_game_id(emulator, old_id)
+        if not new_id or new_id == old_id:
+            return 0
+
+        old_dir = self.backup_root / emulator / old_id
+        new_dir = self.backup_root / emulator / new_id
+
+        moved = 0
+        if old_dir.is_dir():
+            new_dir.mkdir(parents=True, exist_ok=True)
+            # Move each version as a (zip, json) pair; on a timestamp
+            # collision with the target chain, suffix like create_backup
+            # does so no version is ever dropped.
+            for zp in sorted(old_dir.glob("*.zip")):
+                stem = zp.stem
+                counter = 1
+                while (new_dir / f"{stem}.zip").exists():
+                    counter += 1
+                    stem = f"{zp.stem}_{counter}"
+                zp.replace(new_dir / f"{stem}.zip")
+                meta = zp.with_suffix(".json")
+                if meta.exists():
+                    meta.replace(new_dir / f"{stem}.json")
+                moved += 1
+            for leftover in sorted(old_dir.iterdir()):
+                target = new_dir / leftover.name
+                if not target.exists():
+                    leftover.replace(target)
+            try:
+                old_dir.rmdir()
+            except OSError:
+                logger.warning("Old backup dir not empty, left in place: {}", old_dir)
+            # Rewrite game_id in the migrated sidecar metadata
+            for meta in new_dir.glob("*.json"):
+                try:
+                    with open(meta, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if data.get("game_id") == old_id:
+                        data["game_id"] = new_id
+                        with open(meta, "w", encoding="utf-8") as f:
+                            json.dump(data, f, indent=4, ensure_ascii=False)
+                except Exception as e:
+                    logger.warning("Failed to rewrite {}: {}", meta, e)
+
+        # Record the alias; re-point older aliases and drop a stale entry
+        # for the new id so values always point at the canonical name.
+        aliases = self._load_aliases()
+        aliases.pop(f"{emulator}:{new_id}", None)
+        for key, value in list(aliases.items()):
+            if key.startswith(f"{emulator}:") and value == old_id:
+                aliases[key] = new_id
+        aliases[f"{emulator}:{old_id}"] = new_id
+        self._save_aliases(aliases)
+
+        logger.info(
+            "Renamed backup chain {}:{} -> {} ({} versions)",
+            emulator, old_id, new_id, moved,
+        )
+        return moved
+
     def create_backup(self, saves: list[GameSave]) -> BackupRecord:
         """Create a ZIP backup for a group of *saves* (same game).
 
@@ -216,7 +358,10 @@ class BackupManager:
 
         ref = saves[0]
         emulator = ref.emulator
-        game_id = ref.game_id
+        # Follow rename aliases so backups from a stale scan (pre-rename
+        # game_id) land in the canonical chain instead of resurrecting
+        # the old directory.
+        game_id = self.resolve_game_id(emulator, ref.game_id)
         game_name = ref.game_name
         platform = ref.platform
         crc32 = ref.crc32
@@ -424,7 +569,12 @@ class BackupManager:
             return ""
 
     def list_backups(self, emulator: str, game_id: str) -> list[BackupRecord]:
-        """List all backup records for a given game, sorted newest-first."""
+        """List all backup records for a given game, sorted newest-first.
+
+        ``game_id`` may be a pre-rename alias; it is resolved to the
+        canonical id first.
+        """
+        game_id = self.resolve_game_id(emulator, game_id)
         game_dir = self.backup_root / emulator / game_id
         if not game_dir.exists():
             return []
