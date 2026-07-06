@@ -167,12 +167,15 @@ def _selftest(pm: "PluginManager") -> None:
     i18n_ok = t("scan.title") != "scan.title"   # real translation, not the key
     plugin_count = len(pm.get_all_plugins())
 
-    # Verify the WebDAV/keyring deps actually bundled (they import lazily, and
-    # keyring loads backends via entry points — easy for PyInstaller to miss).
+    # Verify the WebDAV/keyring/archive deps actually bundled (they import
+    # lazily, and keyring loads backends via entry points — easy for
+    # PyInstaller to miss).
     deps_ok = True
     try:
         import webdav4.client  # noqa: F401
         import keyring  # noqa: F401
+        import py7zr  # noqa: F401
+        import rarfile  # noqa: F401
     except Exception as e:  # noqa: BLE001
         deps_ok = False
         logger.error("Selftest dependency import failed: {}", e)

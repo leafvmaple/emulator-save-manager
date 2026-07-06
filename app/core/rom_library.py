@@ -80,6 +80,15 @@ ROM_EXTENSIONS: dict[str, str] = {
 #: so their saves don't show up as noise in "saves without ROMs".
 FILENAME_KEYED_EMULATORS = frozenset({"Snes9x", "Mesen", "melonDS", "RetroArch"})
 
+#: Container extensions we look inside. Dispatch is by magic bytes, not
+#: by this suffix — scene sets have been seen shipping RAR files with a
+#: ``.7z`` extension.
+ARCHIVE_EXTENSIONS = frozenset({".zip", ".7z", ".rar"})
+
+_ZIP_MAGIC = b"PK"
+_7Z_MAGIC = b"7z\xbc\xaf\x27\x1c"
+_RAR_MAGIC = b"Rar!"
+
 _HASH_CHUNK = 1024 * 1024
 _NES_MAGIC = b"NES\x1a"
 _REPAIR_MAX_SIZE = 32 * 1024 * 1024
@@ -341,7 +350,7 @@ class RomLibrary:
                 continue
             for f in sorted(d.rglob("*")):
                 ext = f.suffix.lower()
-                if ext not in ROM_EXTENSIONS and ext != ".zip":
+                if ext not in ROM_EXTENSIONS and ext not in ARCHIVE_EXTENSIONS:
                     continue
                 if not f.is_file():
                     continue
@@ -377,6 +386,14 @@ class RomLibrary:
             entry = cache.get(key)
             if (
                 entry
+                and not entry.get("crc32")
+                and entry.get("platform", "Unknown") in ("", "Unknown")
+            ):
+                # A cached total failure (written by older versions, or a
+                # transient NAS error) must not be sticky — rehash it.
+                entry = None
+            if (
+                entry
                 and entry.get("size") == stat.st_size
                 and entry.get("mtime") == int(stat.st_mtime)
             ):
@@ -390,8 +407,13 @@ class RomLibrary:
                     "crc32": crc,
                     "platform": platform,
                 }
-                cache[key] = entry
-                dirty = True
+                if crc or platform != "Unknown":
+                    cache[key] = entry
+                    dirty = True
+                else:
+                    # Total failure (unreadable archive, transient NAS
+                    # error, …) — don't make it sticky; retry next scan.
+                    cache.pop(key, None)
 
             # Embedded identity (survives fan patching). Cached alongside
             # the hash; pre-existing cache entries upgrade in place
@@ -467,33 +489,119 @@ class RomLibrary:
     # Internal
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _hash_file(f: Path) -> tuple[str, str]:
+    @property
+    def _passwords(self) -> list[str]:
+        return list(getattr(self._cfg, "archive_passwords", []) or [])
+
+    def _list_archive_members(self, f: Path) -> list[tuple[str, int, int]] | None:
+        """List ``(name, size, crc32)`` per archive member, or ``None``.
+
+        The backend is chosen by magic bytes — extensions lie (a scene
+        NDS set shipped RAR archives named ``.7z``).  No archive is ever
+        decompressed: zip central directories, 7z headers and RAR
+        headers all store each member's CRC32 — the value No-Intro DATs
+        record.  Header-encrypted archives are retried with each
+        configured ``archive_passwords`` entry (listing only — nothing
+        is extracted).
+        """
+        try:
+            with open(f, "rb") as fh:
+                magic = fh.read(8)
+        except OSError as e:
+            logger.warning("Cannot read {}: {}", f, e)
+            return None
+
+        try:
+            if magic.startswith(_ZIP_MAGIC):
+                with zipfile.ZipFile(f, "r") as zf:
+                    return [
+                        (m.filename, m.file_size, m.CRC)
+                        for m in zf.infolist() if not m.is_dir()
+                    ]
+            if magic.startswith(_7Z_MAGIC):
+                return self._list_7z(f)
+            if magic.startswith(_RAR_MAGIC):
+                return self._list_rar(f)
+        except ImportError as e:
+            logger.warning("Archive backend unavailable for {}: {}", f.name, e)
+            return None
+        except Exception as e:  # noqa: BLE001 - backend-specific errors
+            logger.warning("Unreadable archive {}: {}", f, e)
+            return None
+
+        logger.warning("Unknown archive format: {}", f)
+        return None
+
+    def _list_7z(self, f: Path) -> list[tuple[str, int, int]] | None:
+        import py7zr
+
+        def _listing(password: str | None) -> list[tuple[str, int, int]]:
+            with py7zr.SevenZipFile(f, "r", password=password) as zf:
+                return [
+                    (i.filename, i.uncompressed, i.crc32 or 0)
+                    for i in zf.list() if not i.is_directory
+                ]
+
+        try:
+            return _listing(None)
+        except py7zr.exceptions.PasswordRequired:
+            for pwd in self._passwords:
+                try:
+                    return _listing(pwd)
+                except Exception:  # noqa: BLE001 - wrong password
+                    continue
+            logger.warning("Encrypted archive, no configured password fits: {}", f)
+            return None
+
+    def _list_rar(self, f: Path) -> list[tuple[str, int, int]] | None:
+        import rarfile
+
+        def _listing(password: str | None) -> list[tuple[str, int, int]]:
+            with rarfile.RarFile(str(f)) as rf:
+                if password is not None:
+                    rf.setpassword(password)
+                return [
+                    (i.filename, i.file_size or 0, i.CRC or 0)
+                    for i in rf.infolist() if not i.is_dir()
+                ]
+
+        members = _listing(None)
+        if members:
+            return members
+        # An empty listing on a well-formed RAR means encrypted headers.
+        with rarfile.RarFile(str(f)) as rf:
+            if not rf.needs_password():
+                return members  # legitimately empty archive
+        for pwd in self._passwords:
+            try:
+                members = _listing(pwd)
+                if members:
+                    return members
+            except Exception:  # noqa: BLE001 - wrong password
+                continue
+        logger.warning("Encrypted archive, no configured password fits: {}", f)
+        return None
+
+    def _hash_file(self, f: Path) -> tuple[str, str]:
         """Return ``(crc32_hex, platform)`` for a ROM file.
 
-        Zip archives are not decompressed: the central directory already
-        stores each member's CRC32, which is exactly what No-Intro DATs
-        record.  The largest ROM-extension member represents the archive.
+        Archives are identified through their stored member CRCs (see
+        :meth:`_list_archive_members`); the largest ROM-extension member
+        represents the archive.  Bare files are hashed by streaming.
         """
         ext = f.suffix.lower()
-        if ext == ".zip":
-            try:
-                with zipfile.ZipFile(f, "r") as zf:
-                    members = [m for m in zf.infolist() if not m.is_dir()]
-                rom_members = [
-                    m for m in members
-                    if Path(m.filename).suffix.lower() in ROM_EXTENSIONS
-                ]
-                pool = rom_members or members
-                if not pool:
-                    return "", "Unknown"
-                best = max(pool, key=lambda m: m.file_size)
-                platform = ROM_EXTENSIONS.get(
-                    Path(best.filename).suffix.lower(), "Unknown")
-                return f"{best.CRC:08X}", platform
-            except (OSError, zipfile.BadZipFile) as e:
-                logger.warning("Unreadable zip {}: {}", f, e)
+        if ext in ARCHIVE_EXTENSIONS:
+            members = self._list_archive_members(f)
+            if not members:
                 return "", "Unknown"
+            rom_members = [
+                m for m in members
+                if Path(m[0]).suffix.lower() in ROM_EXTENSIONS
+            ]
+            pool = rom_members or members
+            name, _size, crc = max(pool, key=lambda m: m[1])
+            platform = ROM_EXTENSIONS.get(Path(name).suffix.lower(), "Unknown")
+            return (f"{crc & 0xFFFFFFFF:08X}" if crc else ""), platform
 
         platform = ROM_EXTENSIONS.get(ext, "Unknown")
         crc = 0

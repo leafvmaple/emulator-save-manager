@@ -248,6 +248,7 @@ jobs:
             --collect-data app.i18n \
             --collect-all keyring \
             --collect-submodules webdav4 \
+            --collect-submodules py7zr \
             --add-data "VERSION${{ runner.os == 'Windows' && ';' || ':' }}." \
             --add-data "app/resources/icon.png${{ runner.os == 'Windows' && ';' || ':' }}app/resources" \
             main.py 2>&1 | tee build.log

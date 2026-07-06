@@ -39,6 +39,7 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "webdav_base_path": "",
     "rom_dirs": [],
     "dat_dir": "",
+    "archive_passwords": [],
 }
 
 
@@ -148,6 +149,12 @@ class Config:
         """Directory holding No-Intro .dat files for ROM verification."""
         p = self._data.get("dat_dir", "")
         return Path(p) if p else self._data_dir / "dat"
+
+    @property
+    def archive_passwords(self) -> list[str]:
+        """Passwords tried against header-encrypted ROM archives."""
+        pwds = self._data.get("archive_passwords", [])
+        return [str(p) for p in pwds] if isinstance(pwds, list) else []
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)

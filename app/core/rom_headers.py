@@ -31,6 +31,12 @@ _GBA_FIXED_BYTE = 0x96  # mandatory value at 0xB2, checked by the BIOS
 #: Extensions with an embedded identity we know how to read.
 _PARSEABLE = {".gb", ".gbc", ".gba", ".nds", ".dsi"}
 
+#: Container extensions worth probing. Only zip supports the cheap
+#: partial member read this module needs — 7z/RAR members can't be
+#: peeked without decompressing (or an external tool), so those parse
+#: as unknown identity and matching falls back to CRC.
+_ARCHIVES = {".zip", ".7z", ".rar"}
+
 
 def _ascii(data: bytes) -> str:
     """Decode printable ASCII up to the first NUL ('' if anything odd)."""
@@ -96,7 +102,7 @@ def _read_head(path: Path) -> tuple[str, bytes] | None:
     """Return ``(extension, first bytes)`` of *path* or its zip member."""
     ext = path.suffix.lower()
     try:
-        if ext == ".zip":
+        if ext in _ARCHIVES:
             with zipfile.ZipFile(path, "r") as zf:
                 members = [
                     m for m in zf.infolist()

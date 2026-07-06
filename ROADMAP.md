@@ -58,6 +58,16 @@ DAT hash — are legitimate scan-time writes (original kept as a sibling
   page's "Normalize Names" button previews the plan with per-item
   checkboxes. Follow-ups: rename members inside zip archives to match;
   configurable name templates.
+- **Multi-container support** *(Status: shipped)*: zip / 7z / RAR
+  archives identified through their stored member CRCs without
+  decompressing anything; the backend is picked by magic bytes because
+  extensions lie (a real NDS set ships RAR files named `.7z`). Unreadable
+  or unknown archives degrade to "unidentified" and failures are never
+  cached (on either the write or the read side), so transient NAS errors
+  self-heal on rescan. Header-encrypted archives are listed by trying
+  each configured `archive_passwords` entry (7z and RAR; listing only,
+  nothing is extracted) — field-verified against a scene NDS set:
+  998/1000 dumps identified once the site password was configured.
 - **Custom game DB** *(Status: shipped)*: `games_custom.json` in the data
   dir keys identities by content CRC for ROMs no DAT will ever match
   (translations, hacks, unlicensed originals); the "Draft Unidentified"

@@ -157,6 +157,115 @@ def test_missing_rom_dir_is_tolerated(cfg, tmp_path):
 
 
 # ----------------------------------------------------------------------
+# Multi-container support (zip / 7z / rar, dispatched by magic bytes)
+# ----------------------------------------------------------------------
+
+def test_7z_member_crc_and_platform(cfg, tmp_path):
+    import io
+    import py7zr
+
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    content = b"NDS-ROM-CONTENT"
+    with py7zr.SevenZipFile(roms_dir / "Electroplankton (Japan).7z", "w") as z:
+        z.writef(io.BytesIO(content), "Electroplankton (Japan).nds")
+
+    roms = _library(cfg, roms_dir).scan()
+    assert len(roms) == 1
+    assert roms[0].crc32 == _crc(content)
+    assert roms[0].platform == "NDS"
+
+
+def test_zip_disguised_as_7z_is_dispatched_by_magic(cfg, tmp_path):
+    """Extensions lie (a real NDS set ships RAR named .7z) — the reverse
+    case, a zip named .7z, must be identified through its magic bytes."""
+    import zipfile
+
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    content = b"GBA-ROM"
+    with zipfile.ZipFile(roms_dir / "fake.7z", "w") as zf:
+        zf.writestr("Mother 3 (Japan).gba", content)
+
+    roms = _library(cfg, roms_dir).scan()
+    assert roms[0].crc32 == _crc(content)
+    assert roms[0].platform == "GBA"
+
+
+def test_unknown_archive_magic_is_tolerated_and_not_cached(cfg, tmp_path):
+    import json
+
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    bad = roms_dir / "garbage.rar"
+    bad.write_bytes(b"NOT-AN-ARCHIVE-AT-ALL")
+
+    roms = _library(cfg, roms_dir).scan()
+    assert len(roms) == 1
+    assert roms[0].crc32 == ""
+    assert roms[0].platform == "Unknown"
+
+    # Failures must not become sticky: a transient NAS error would
+    # otherwise be cached as a permanent blank until the file changes.
+    cache_path = cfg.data_dir / "rom_hash_cache.json"
+    if cache_path.exists():
+        entries = json.loads(cache_path.read_text(encoding="utf-8"))["entries"]
+        assert str(bad) not in entries
+
+
+def test_cached_failure_entry_is_rehashed(cfg, tmp_path):
+    """Failure entries cached by older versions must not stay sticky."""
+    import json
+    import zipfile
+
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    content = b"NES-ROM"
+    p = roms_dir / "game.zip"
+    with zipfile.ZipFile(p, "w") as zf:
+        zf.writestr("game.nes", content)
+
+    stat = p.stat()
+    cache_path = cfg.data_dir / "rom_hash_cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps({
+        "version": 1,
+        "entries": {str(p): {
+            "size": stat.st_size, "mtime": int(stat.st_mtime),
+            "crc32": "", "platform": "Unknown",
+        }},
+    }), encoding="utf-8")
+
+    roms = _library(cfg, roms_dir).scan()
+    assert roms[0].crc32 == _crc(content)
+    assert roms[0].platform == "NES"
+
+
+def test_encrypted_7z_needs_configured_password(cfg, tmp_path):
+    """Header-encrypted archives list only when a password matches."""
+    import io
+    import py7zr
+
+    roms_dir = tmp_path / "roms"
+    roms_dir.mkdir()
+    content = b"SECRET-NDS-ROM"
+    with py7zr.SevenZipFile(roms_dir / "ff3.7z", "w", password="oldmanemu.net",
+                            header_encryption=True) as z:
+        z.writef(io.BytesIO(content), "Final Fantasy III (Japan).nds")
+
+    # Without the password: degrades to unidentified, never crashes.
+    lib = _library(cfg, roms_dir)
+    roms = lib.scan()
+    assert roms[0].crc32 == ""
+
+    # With it: member CRC resolves normally.
+    cfg.set("archive_passwords", ["wrong-guess", "oldmanemu.net"])
+    roms = lib.scan()
+    assert roms[0].crc32 == _crc(content)
+    assert roms[0].platform == "NDS"
+
+
+# ----------------------------------------------------------------------
 # DAT verification + convergent NES header repair
 # ----------------------------------------------------------------------
 
