@@ -234,9 +234,14 @@ jobs:
           # repo root is on sys.path and `app.*` is importable; otherwise
           # collect-* silently skips everything and ships a hollow binary
           # (no translations, no plugins).
-          # Windows exe gets the .ico; macOS/Linux use the runtime PNG icon.
+          # Windows exe gets the .ico + version-info resource (Properties →
+          # Details); macOS/Linux use the runtime PNG icon. Note: UAC's
+          # "Publisher" needs Authenticode signing, not this metadata.
           ICON_FLAG=()
-          [ "${{ runner.os }}" = "Windows" ] && ICON_FLAG=(--icon app/resources/icon.ico)
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            python tools/gen_version_info.py version_info.txt
+            ICON_FLAG=(--icon app/resources/icon.ico --version-file version_info.txt)
+          fi
           python -m PyInstaller \
             --noconfirm \
             --onefile \
