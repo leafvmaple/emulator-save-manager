@@ -33,6 +33,7 @@ from app.models.emulator import EmulatorInfo
 from app.models.game_save import GameSave, SaveType
 from app.core.game_icon import GameIconProvider, IconDownloadWorker, get_plugin_icon
 from app.core import scan_cache
+from app.saveinfo import get_save_info_manager
 from app.ui import theme
 from app.ui.components.badge import TypeBadge
 from app.ui.components.page_header import PageHeader
@@ -291,17 +292,24 @@ class _GameSaveCard(CardWidget):
         sep.setStyleSheet(f"background:{theme.divider()};")
         detail_layout.addWidget(sep)
 
-        # Collect all save files
+        # Collect all save files (with the owning save's platform for the
+        # save-info pre-filter)
         all_files = []
         for s in saves:
             for sf in s.save_files:
-                all_files.append(sf)
+                all_files.append((sf, s.platform))
+
+        si_manager = get_save_info_manager()
+        info_flags = [
+            bool(si_manager.candidates_for(sf.path, plat)) for sf, plat in all_files
+        ]
+        any_info = any(info_flags)
 
         type_col_w = 92
         size_col_w = 84
         modified_col_w = 132
-        action_col_w = 24
         col_gap = theme.GAP_MD
+        action_col_w = 24 * 2 + col_gap if any_info else 24
 
         # Header row
         header_widget = QWidget(self)
@@ -337,7 +345,7 @@ class _GameSaveCard(CardWidget):
 
         # File rows — each is a hoverable widget for scanability
         muted = f"color:{theme.text_muted()};"
-        for sf in all_files:
+        for (sf, plat), has_info in zip(all_files, info_flags):
             row_widget = QWidget(self)
             row_widget.setObjectName("saveFileRow")
             row_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -383,11 +391,28 @@ class _GameSaveCard(CardWidget):
             mod_label.setStyleSheet(muted)
             frow.addWidget(mod_label)
 
+            _path = sf.path
+
+            # Save-info button — only when a plugin's pre-filter accepts the
+            # file; a fixed spacer keeps rows without one aligned.
+            if any_info:
+                if has_info:
+                    info_btn = TransparentToolButton(FIF.INFO, row_widget)
+                    info_btn.setFixedSize(24, 24)
+                    info_btn.setToolTip(t("save_info.show"))
+                    info_btn.clicked.connect(
+                        lambda checked=False, p=_path, pl=plat: self._show_save_info(p, pl)
+                    )
+                    frow.addWidget(info_btn)
+                else:
+                    spacer = QWidget(row_widget)
+                    spacer.setFixedSize(24, 24)
+                    frow.addWidget(spacer)
+
             # Open folder button for this file
             file_folder_btn = TransparentToolButton(FIF.FOLDER, row_widget)
             file_folder_btn.setFixedSize(24, 24)
             file_folder_btn.setToolTip(t("common.open_folder"))
-            _path = sf.path
             file_folder_btn.clicked.connect(lambda checked=False, p=_path: self._open_file_folder(p))
             frow.addWidget(file_folder_btn)
 
@@ -444,6 +469,11 @@ class _GameSaveCard(CardWidget):
             subprocess.Popen(["open", str(folder)])  # noqa: S603
         else:
             subprocess.Popen(["xdg-open", str(folder)])  # noqa: S603
+
+    def _show_save_info(self, path: Path, platform: str) -> None:
+        """Open the save-info dialog for one save file."""
+        from app.ui.components.save_info_dialog import SaveInfoDialog
+        SaveInfoDialog(path, platform, self.window()).exec()
 
     @staticmethod
     def _open_file_folder(path: Path) -> None:

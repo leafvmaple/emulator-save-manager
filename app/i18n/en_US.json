@@ -325,5 +325,11 @@
         "savestate": "Save State",
         "folder": "Memory Card",
         "file": "File"
+    },
+    "save_info": {
+        "title": "Save Info",
+        "show": "View save info",
+        "not_recognized": "No plugin could identify this save",
+        "source": "Plugin: {name}"
     }
 }

@@ -18,6 +18,7 @@ A cross-platform emulator save manager with multi-device sync. Auto-detects inst
 - **Multi-device Sync** — Push/pull backups through a shared folder (OneDrive, Google Drive, Nutstore, etc.) with conflict detection and resolution
 - **Portable Paths** — Backup metadata uses placeholders (`${DOCUMENTS}`, `${APPDATA}`, …) so archives work across machines even when the Documents folder is relocated
 - **Game Cover Art** — Downloads cover art from GitHub repositories; displays in card UI alongside game info
+- **Save Info** — Game-specific plugins read a save file and show what's inside (hero, progress, money, location) right from the scan list; Metal Max (Famicom) ships built-in — see [docs/save-info-plugins.md](docs/save-info-plugins.md)
 - **Plugin Architecture** — Each emulator is a self-contained plugin; easy to add new emulators
 - **i18n** — Supports Simplified Chinese (zh_CN), English (en_US) and Japanese (ja_JP)
 - **Fluent Design** — Modern card-based UI built with PySide6-Fluent-Widgets

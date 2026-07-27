@@ -325,5 +325,11 @@
         "savestate": "即时存档",
         "folder": "记忆卡",
         "file": "文件"
+    },
+    "save_info": {
+        "title": "存档信息",
+        "show": "查看存档信息",
+        "not_recognized": "没有插件能识别此存档",
+        "source": "来源插件：{name}"
     }
 }

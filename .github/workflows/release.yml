@@ -250,6 +250,8 @@ jobs:
             "${ICON_FLAG[@]}" \
             --collect-submodules app.plugins \
             --collect-data app.plugins \
+            --collect-submodules app.saveinfo \
+            --collect-data app.saveinfo \
             --collect-data app.i18n \
             --collect-all keyring \
             --collect-submodules webdav4 \

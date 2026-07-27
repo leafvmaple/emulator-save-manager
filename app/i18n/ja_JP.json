@@ -325,5 +325,11 @@
         "savestate": "ステートセーブ",
         "folder": "メモリーカード",
         "file": "ファイル"
+    },
+    "save_info": {
+        "title": "セーブ情報",
+        "show": "セーブ情報を見る",
+        "not_recognized": "このセーブを識別できるプラグインがありません",
+        "source": "プラグイン：{name}"
     }
 }
